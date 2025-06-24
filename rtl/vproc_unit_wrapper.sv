@@ -62,7 +62,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
 
         `ifdef RISCV_ZVE32F
         output logic                                 freg_res,
-        `endif 
+        `endif
         output logic                                 xreg_valid_o,
         input  logic                                 xreg_ready_i,
         output logic    [XIF_ID_W              -1:0] xreg_id_o,
@@ -469,7 +469,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
             assign pipe_out_instr_done_o     = (~flushing_q & unit_out_ctrl.last_cycle & ~unit_out_ctrl.requires_flush                                ) | flushing_last_cycle;
             assign pipe_out_pend_clear_o     = (~flushing_q & unit_out_ctrl.last_cycle & ~unit_out_ctrl.requires_flush & ~unit_out_ctrl.mode.elem.xreg) | flushing_last_cycle;
             assign pipe_out_pend_clear_cnt_o = unit_out_ctrl.emul; // TODO reductions always have destination EMUL == 1
-        end 
+        end
         else if (UNIT == UNIT_DIV) begin
             CTRL_T                 unit_out_ctrl;
             logic [MAX_OP_W  -1:0] unit_out_res;
@@ -513,14 +513,14 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
             assign pipe_out_pend_clear_cnt_o            = '0;
             assign pipe_out_instr_done_o                = unit_out_ctrl.last_cycle;
             assign pipe_out_res_flags_o[0].shift        = unit_out_ctrl.res_shift;
-        end 
+        end
         else if (UNIT == UNIT_FPU) begin
             CTRL_T                 unit_out_ctrl;
             logic [MAX_OP_W  -1:0] unit_out_res;
             logic [MAX_OP_W/8-1:0] unit_out_mask;
             logic                  unit_out_valid;
             logic        unit_out_ready;
-            
+
             vproc_fpu #(
                 .FPU_OP_W         ( MAX_OP_W                                    ),
                 .CTRL_T           ( CTRL_T                                      )
@@ -581,7 +581,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                 if (unit_out_ctrl.first_cycle) begin
                     has_valid_result_d = 1'b0;
                 end
-                if (unit_out_valid) begin 
+                if (unit_out_valid) begin
                     has_valid_result_d = 1'b1;
                 end
             end
@@ -633,7 +633,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                     default: ;
                 endcase
             end
-            
+
             // flush the downstream part of the pipeline after the last cycle if needed
             logic flushing_last_cycle;
             always_comb begin
@@ -699,12 +699,12 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                    pipe_out_res_valid_o[0]          = flushing_q | unit_out_valid;
                    pipe_out_res_data_o [0]          = unit_out_res;
                    pipe_out_res_mask_o [0][3:0]     = flushing_q ? '0 : unit_out_mask;
-                
+
                    pipe_out_instr_done_o     = (~flushing_q & unit_out_ctrl.last_cycle & ~unit_out_ctrl.requires_flush ) | flushing_last_cycle;
                    pipe_out_pend_clear_o     = (~flushing_q & unit_out_ctrl.last_cycle & ~unit_out_ctrl.requires_flush ) | flushing_last_cycle;
                    pipe_out_pend_clear_cnt_o = flushing_emul_q; // TODO reductions always have destination EMUL == 1
                    pipe_out_res_flags_o[0].vreg_idx        = unit_out_ctrl.vreg_idx;
-                   
+
 
                 end else begin
                     //Normal Connections for not reduction operations
@@ -726,7 +726,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                      pipe_out_instr_done_o     = unit_out_ctrl.last_cycle;
                      pipe_out_res_flags_o[0].elemwise = 1'b0;
                      pipe_out_res_flags_o[0].vreg_idx        = unit_out_ctrl.vreg_idx;
-                     
+
 
                 end
             end

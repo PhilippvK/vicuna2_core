@@ -218,7 +218,7 @@ typedef enum logic [1:0]
     DIV_REMU,
     DIV_REM
  } div_opcode_e;
- 
+
 typedef struct packed {
     logic       masked;
     div_opcode_e    op;
@@ -246,7 +246,7 @@ typedef enum logic [2:0] {
    ROD = 3'b101,  // This mode is not defined in RISC-V FP-SPEC
    DYN = 3'b111
 } fpu_roundmode_e;
- 
+
 typedef struct packed {
     logic       masked;
     fpu_opcode_e    op;
