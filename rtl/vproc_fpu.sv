@@ -175,7 +175,7 @@ module vproc_fpu #(
         operand_2_fpu = '0;
 
 
-        if (unit_ctrl_q.mode.fpu.op_reduction == 1'b1 & unit_ctrl_q.mode.fpu.op == ADD) begin
+        if (unit_ctrl_q.mode.fpu.op_reduction == 1'b1 & unit_ctrl_q.mode.fpu.op == vproc_pkg::ADD) begin
             if(unit_ctrl_q.first_cycle == 1'b1) begin
                 operand_0_fpu = '0;//This operand is unused by these operations;
                 operand_1_fpu = {'0, pipe_in_op1_i_q[31:0]};//First cycle of reduction operation uses vs1[0]  //TODO: MAKE THESE GENERIC
@@ -188,7 +188,7 @@ module vproc_fpu #(
 
             end
 
-        end else if (unit_ctrl_q.mode.fpu.op_reduction == 1'b1 & unit_ctrl_q.mode.fpu.op == MINMAX) begin
+        end else if (unit_ctrl_q.mode.fpu.op_reduction == 1'b1 & unit_ctrl_q.mode.fpu.op == vproc_pkg::MINMAX) begin
 
             if(unit_ctrl_q.first_cycle == 1'b1) begin
                 operand_0_fpu = {'0, pipe_in_op2_i_q[31:0]};
@@ -198,9 +198,9 @@ module vproc_fpu #(
                 operand_0_fpu = {'0, pipe_in_op2_i_q[31:0]};
                 operand_1_fpu = {'0, reduction_buffer_q[31:0]};//all other cycles use previous result
                 operand_2_fpu = '0;//This operand is unused by these operations;
-            end     
+            end
 
-        end else if (unit_ctrl_q.mode.fpu.op == ADD) begin
+        end else if (unit_ctrl_q.mode.fpu.op == vproc_pkg::ADD) begin
 
             if (unit_ctrl_q.mode.fpu.op_rev == 1'b1) begin
                 //Reverse input operands
@@ -212,8 +212,8 @@ module vproc_fpu #(
                 operand_1_fpu = pipe_in_op2_i_q;
                 operand_2_fpu = pipe_in_op1_i_q;
             end
-        
-         end else if (unit_ctrl_q.mode.fpu.op == DIV) begin
+
+         end else if (unit_ctrl_q.mode.fpu.op == vproc_pkg::DIV) begin
 
             if (unit_ctrl_q.mode.fpu.op_rev == 1'b1) begin
                 //Reverse input operands
@@ -226,13 +226,13 @@ module vproc_fpu #(
                 operand_2_fpu = 32'b0;//This operand is unused by these operations
             end
 
-        end else if (unit_ctrl_q.mode.fpu.op == MINMAX | unit_ctrl_q.mode.fpu.op == MUL | unit_ctrl_q.mode.fpu.op == SGNJ ) begin
-            
+        end else if (unit_ctrl_q.mode.fpu.op == vproc_pkg::MINMAX | unit_ctrl_q.mode.fpu.op == vproc_pkg::MUL | unit_ctrl_q.mode.fpu.op == vproc_pkg::SGNJ ) begin
+
             operand_0_fpu = pipe_in_op2_i_q;
             operand_1_fpu = pipe_in_op1_i_q;
             operand_2_fpu = 32'b0;//This operand is unused by these operations
 
-        end else if (unit_ctrl_q.mode.fpu.op == FMADD | unit_ctrl_q.mode.fpu.op == FNMSUB) begin
+        end else if (unit_ctrl_q.mode.fpu.op == vproc_pkg::FMADD | unit_ctrl_q.mode.fpu.op == vproc_pkg::FNMSUB) begin
 
             if (unit_ctrl_q.mode.fpu.op_rev == 1'b1) begin
                 //Reverse input operands
@@ -246,7 +246,7 @@ module vproc_fpu #(
             end
 
 
-        end else if (unit_ctrl_q.mode.fpu.op == CLASSIFY | unit_ctrl_q.mode.fpu.op == F2I | unit_ctrl_q.mode.fpu.op == I2F) begin
+        end else if (unit_ctrl_q.mode.fpu.op == vproc_pkg::CLASSIFY | unit_ctrl_q.mode.fpu.op == vproc_pkg::F2I | unit_ctrl_q.mode.fpu.op == vproc_pkg::I2F) begin
 
             operand_0_fpu = pipe_in_op2_i_q;
             operand_1_fpu = 32'b0;//This operand is unused by these operations
