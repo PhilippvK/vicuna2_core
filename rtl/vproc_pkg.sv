@@ -223,7 +223,7 @@ typedef struct packed {
     logic       masked;
     div_opcode_e    op;
 `ifdef VPROC_OP_MODE_UNION
-    logic [1:0] unused;
+    logic [9:0] unused;
 `endif
 } op_mode_div;
 
@@ -257,7 +257,7 @@ typedef struct packed {
     logic       src_1_narrow;
     logic       src_2_narrow;
 `ifdef VPROC_OP_MODE_UNION
-    logic [3:0] unused;
+    // logic [0:0] unused;
 `endif
 } op_mode_fpu;
 
@@ -303,7 +303,11 @@ typedef struct packed {
     logic       freg;
     `endif
 `ifdef VPROC_OP_MODE_UNION
+    `ifdef RISCV_ZVE32F
+    logic [4:0] unused;
+    `else
     logic [5:0] unused;
+    `endif
 `endif
 } op_mode_elem;
 
