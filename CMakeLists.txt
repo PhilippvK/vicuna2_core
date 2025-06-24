@@ -34,19 +34,19 @@ set(VLANE_W 32 CACHE STRING "VLANE_W")
 ##############
 # Configuration Selection
 ##############
-    
+
 if(${RISCV_ARCH} STREQUAL "rv32im_zve32x")
     set(RISCV_ZVE32X "-DRISCV_ZVE32X" )
     set(RISCV_ZVE32F "" )
     set(RISCV_ZVFH "" )
     set(VPROC_CONFIG dual-zve32x)
-    
+
 elseif(${RISCV_ARCH} STREQUAL "rv32imf_zve32f")
     set(RISCV_ZVE32X "-DRISCV_ZVE32X" )
     set(RISCV_ZVE32F "-DRISCV_ZVE32F" )
     set(RISCV_ZVFH "" )
     set(VPROC_CONFIG dual-zve32f)
-    
+
 elseif(${RISCV_ARCH} STREQUAL "rv32imf_zfh_zve32f_zvfh") #Build CV32E40X with Vicuna (+floating point + half precision float) and FPU on the Xif interface
     set(RISCV_ZVE32X "-DRISCV_ZVE32X" )
     set(RISCV_ZVE32F "-DRISCV_ZVE32F" )
@@ -55,7 +55,7 @@ elseif(${RISCV_ARCH} STREQUAL "rv32imf_zfh_zve32f_zvfh") #Build CV32E40X with Vi
 
 else()
     #message(FATAL_ERROR "Unsupported RISCV_ARCH selected for Vicuna Co-processor") #TODO: Scalar Selections don't need to cause a fatal error
-    
+
 endif()
 
 # Experimental Features NOT STABLE
@@ -67,7 +67,7 @@ option(FORCE_ALIGNED_READS "original vicuna configuration where all vector reads
 # Sources/Include Directories
 ##############
 
-#Path to VICUNA sources  
+#Path to VICUNA sources
 set(DESIGN_RTL_DIR_VICUNA ${CMAKE_CURRENT_SOURCE_DIR}/rtl) #TODO: UPDATE PATH
 
 #Path to CVFPU sources
@@ -75,7 +75,7 @@ set(DESIGN_RTL_DIR_CVFPU ${CMAKE_CURRENT_SOURCE_DIR}/cvfpu/src) #TODO: UPDATE PA
 
 
 set(VICUNA_SOURCE   ${DESIGN_RTL_DIR_VICUNA}/vproc_pkg.sv                               #Vicuna sources
-                    ${DESIGN_RTL_DIR_VICUNA}/../vproc_config.sv 
+                    ${DESIGN_RTL_DIR_VICUNA}/../vproc_config.sv
                     ${DESIGN_RTL_DIR_VICUNA}/vproc_xif.sv
                     ${DESIGN_RTL_DIR_VICUNA}/vproc_core.sv
                     ${DESIGN_RTL_DIR_VICUNA}/vproc_vregpack.sv
@@ -104,7 +104,7 @@ set(VICUNA_SOURCE   ${DESIGN_RTL_DIR_VICUNA}/vproc_pkg.sv                       
 
 set(VICUNA_INCLUDE  ${DESIGN_RTL_DIR_VICUNA}                                            #Vicuna Include Dirs
                     ${DESIGN_RTL_DIR_VICUNA}/../sva)
-                   
+
 set(CVFPU_SOURCE    ${DESIGN_RTL_DIR_CVFPU}/fpnew_pkg.sv
                     ${DESIGN_RTL_DIR_CVFPU}/common_cells/src/cf_math_pkg.sv             #CVFPU Sources
                     ${DESIGN_RTL_DIR_CVFPU}/fpu_div_sqrt_mvp/hdl/defs_div_sqrt_mvp.sv
@@ -150,7 +150,7 @@ set(CVFPU_SOURCE    ${DESIGN_RTL_DIR_CVFPU}/fpnew_pkg.sv
                     ${DESIGN_RTL_DIR_CVFPU}/../vendor/opene906/E906_RTL_FACTORY/gen_rtl/fpu/rtl/pa_fpu_frbus.v
                     ${DESIGN_RTL_DIR_CVFPU}/../vendor/opene906/E906_RTL_FACTORY/gen_rtl/fpu/rtl/pa_fpu_src_type.v
                     )
-                    
+
 
 
 set(CVFPU_INCLUDE   ${DESIGN_RTL_DIR_CVFPU}
@@ -162,10 +162,10 @@ set(CVFPU_INCLUDE   ${DESIGN_RTL_DIR_CVFPU}
                     ${DESIGN_RTL_DIR_CVFPU}/../vendor/opene906/E906_RTL_FACTORY/gen_rtl/fdsu/rtl
                     ${DESIGN_RTL_DIR_CVFPU}/../vendor/opene906/E906_RTL_FACTORY/gen_rtl/clk/rtl
                     ${DESIGN_RTL_DIR_CVFPU}/../vendor/opene906/E906_RTL_FACTORY/gen_rtl/fpu/rtl
-                    )               
-                   
-                 
-                   
+                    )
+
+
+
 ##############
 #Generate vproc_config.sv for chosen configuration.
 ##############
