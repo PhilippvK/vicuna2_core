@@ -11,8 +11,8 @@ module vproc_fpu #(
         `else
         parameter fpnew_pkg::fpu_features_t       FPU_FEATURES       = fpnew_pkg::RV32F,           //TODO:Need to pass these all the way to the top level for easy adjustments
         `endif
-        
-        parameter fpnew_pkg::fpu_implementation_t FPU_IMPLEMENTATION = fpnew_pkg::DEFAULT_NOREGS   //TODO:Need to pass these all the way to the top level for easy adjustments 
+
+        parameter fpnew_pkg::fpu_implementation_t FPU_IMPLEMENTATION = fpnew_pkg::DEFAULT_NOREGS   //TODO:Need to pass these all the way to the top level for easy adjustments
             )(
         input  logic                  clk_i,
         input  logic                  async_rst_ni,
@@ -42,14 +42,14 @@ module vproc_fpu #(
     typedef struct packed {
         CTRL_T     ctrl;
         logic      last_cycle;
-    } fpu_tag; 
+    } fpu_tag;
 
-   
+
 
     ///////////////////////////////////////////////////////////////////////////
     //Input Connections - Connect to buffers
     ///////////////////////////////////////////////////////////////////////////
-    always_comb begin                                                
+    always_comb begin
             unit_ctrl_d     = pipe_in_ctrl_i;
             data_valid_i_d  = pipe_in_valid_i;
             pipe_in_op1_i_d = pipe_in_op1_i;
@@ -130,7 +130,7 @@ module vproc_fpu #(
         unit_ctrl_q <= unit_ctrl_d;
         data_valid_i_q <= data_valid_i_d;
         reduction_buffer_q <= reduction_buffer_d;
-            
+
     end
 
     ///////////////////////////////////////////////////////////////////////////
@@ -140,7 +140,7 @@ module vproc_fpu #(
     //store the intermediate result of the reduction operation here
     logic [31:0] reduction_buffer_d, reduction_buffer_q;
 
-    logic last_cycle; 
+    logic last_cycle;
     always_comb begin
         last_cycle = 0;
         if ((unit_ctrl_q.last_cycle) | (unit_ctrl_q.last_vl_part & unit_ctrl_d.vl_part_0)) begin
@@ -148,7 +148,7 @@ module vproc_fpu #(
         end else begin
             last_cycle = 1'b0;
         end
-        
+
     end
 
     ///////////////////////////////////////////////////////////////////////////
@@ -186,7 +186,7 @@ module vproc_fpu #(
                 operand_1_fpu = {'0, reduction_buffer_q[31:0]};//all other cycles use previous result
                 operand_2_fpu = {'0, pipe_in_op2_i_q[31:0]};
 
-            end           
+            end
 
         end else if (unit_ctrl_q.mode.fpu.op_reduction == 1'b1 & unit_ctrl_q.mode.fpu.op == MINMAX) begin
 
@@ -271,7 +271,7 @@ module vproc_fpu #(
 
 
     logic [FPU_OP_W  -1:0] operand_0_fpu, operand_1_fpu, operand_2_fpu;
-    
+
     generate
         for (genvar g = 0; g < FPU_OP_W/ 32; g++) begin
               fpnew_top #(
@@ -281,30 +281,30 @@ module vproc_fpu #(
                     .TagType       (fpu_tag)              // Type for metadata to pass through with instruction.  allows for pipelined operation
                     //Missing 2 config parameters :TrueSIMDClass and EnableSIMDMask - may be necessary for FP16 SIMD OPERATION
                 ) fpnew_i (
-                    .clk_i         (clk_i),                               
-                    .rst_ni        (async_rst_ni),          
-                    .operands_i    ({operand_2_fpu[32*g +: 32], operand_1_fpu[32*g +: 32], operand_0_fpu[32*g +: 32]}),  
+                    .clk_i         (clk_i),
+                    .rst_ni        (async_rst_ni),
+                    .operands_i    ({operand_2_fpu[32*g +: 32], operand_1_fpu[32*g +: 32], operand_0_fpu[32*g +: 32]}),
                     .rnd_mode_i    (unit_ctrl_q.mode.fpu.rnd_mode ), //TODO:Needs to be read from the CSR (can do this at decoder?)
-                    .op_i          (unit_ctrl_q.mode.fpu.op ),       
-                    .op_mod_i      (unit_ctrl_q.mode.fpu.op_mod ),       
-                    .src_fmt_i     (src_fmt),                              
-                    .dst_fmt_i     (dst_fmt),                           
-                    .int_fmt_i     (int_fmt),                            
-                    .vectorial_op_i(vectorial_op),                        
-                    .tag_i         (unit_in_fpu_tag),                       
+                    .op_i          (unit_ctrl_q.mode.fpu.op ),
+                    .op_mod_i      (unit_ctrl_q.mode.fpu.op_mod ),
+                    .src_fmt_i     (src_fmt),
+                    .dst_fmt_i     (dst_fmt),
+                    .int_fmt_i     (int_fmt),
+                    .vectorial_op_i(vectorial_op),
+                    .tag_i         (unit_in_fpu_tag),
                     .simd_mask_i   (2'b11),                                 //TODO: In SIMD mode, select the active lanes to not pollute the output status flags.  Derive from input mask
                     .in_valid_i    (data_valid_i_q),                        //DIRECT CONNECT to pipe_in_valid_i
-                    .in_ready_o    (pipe_in_ready_fpu[g]),                   
-                    .flush_i       (~sync_rst_ni),                          
-                    .result_o      (pipe_out_res_o[32*g +: 32]),            
+                    .in_ready_o    (pipe_in_ready_fpu[g]),
+                    .flush_i       (~sync_rst_ni),
+                    .result_o      (pipe_out_res_o[32*g +: 32]),
                     .status_o      (),                                      //TODO: RISCV FFLAGS status regs/ vector float instructions need to update the CSR
-                    .tag_o         (unit_out_fpu_tag[g]),              
-                    .out_valid_o   (pipe_out_valid_fpu[g]),                  
+                    .tag_o         (unit_out_fpu_tag[g]),
+                    .out_valid_o   (pipe_out_valid_fpu[g]),
                     .out_ready_i   ((&pipe_out_valid_fpu)),                 //output only ready when pipeline is ready(TODO: Why does this signal not get raised for ops that arent DIV?) and all units are finished operating.  Causes units to hold their outputs
                     .busy_o        ()                                       //TODO: Can be monitored for usage? Should be unneeded
                 );
 
-            
+
         end
     endgenerate
 endmodule
