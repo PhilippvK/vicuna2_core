@@ -335,6 +335,8 @@ module vproc_core import vproc_pkg::*; #(
     assign instr_valid_o = instr_valid;
     assign issue_id_used_o = issue_id_used;
 
+    logic dec_vl_override;
+
     op_unit instr_unit;
     assign instr_unit_o = instr_unit;
     op_mode instr_mode;
@@ -369,10 +371,11 @@ module vproc_core import vproc_pkg::*; #(
         .widenarrow_o       ( dec_data_d.widenarrow               ),
         .rs1_o              ( dec_data_d.rs1                      ),
         .rs2_o              ( dec_data_d.rs2                      ),
-        .rd_o               ( dec_data_d.rd                       )
+        .rd_o               ( dec_data_d.rd                       ),
+        .vl_override_o      ( dec_vl_override                     )
     );
     assign dec_data_d.id         = xif_issue_if.issue_req.id;
-    assign dec_data_d.vl_0       = vl_0_q;
+    assign dec_data_d.vl_0       = vl_0_q & ~dec_vl_override;
     assign dec_data_d.unit       = instr_unit;
     assign dec_data_d.mode       = instr_mode;
     assign dec_data_d.pend_load  = (instr_unit == UNIT_LSU) & ~instr_mode.lsu.store;
