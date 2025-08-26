@@ -26,12 +26,31 @@ module vproc_pending_wr #(
     logic [31:0] pend_vd;
 
     //Changes to control flow to improve performance.  Introduces timing anomalies
-    //Here, only the vregs that will actually be used are marked with a pending write.  
+    //Here, only the vregs that will actually be used are marked with a pending write.
     // Old Vicuna marks all vregs in a group with a pending write, regardless of if the current vector has elements in them or not
      `ifdef OLD_VICUNA
         always_comb begin
             pend_vd = DONT_CARE_ZERO ? '0 : 'x;
-            if (unit_i == UNIT_LSU) begin
+            if (unit_i == UNIT_LSU & ~mode_i.lsu.store & mode_i.lsu.stride == LSU_INDEXED) begin
+                unique case ({mode_i.cfg.lmul, mode_i.lsu.nfields})
+                    {LMUL_1, 3'b000}: pend_vd = 32'h01 <<  rd_i.addr              ;
+                    {LMUL_1, 3'b001}: pend_vd = 32'h03 <<  rd_i.addr              ;
+                    {LMUL_1, 3'b010}: pend_vd = 32'h07 <<  rd_i.addr              ;
+                    {LMUL_1, 3'b011}: pend_vd = 32'h0F <<  rd_i.addr              ;
+                    {LMUL_1, 3'b100}: pend_vd = 32'h1F <<  rd_i.addr              ;
+                    {LMUL_1, 3'b101}: pend_vd = 32'h3F <<  rd_i.addr              ;
+                    {LMUL_1, 3'b110}: pend_vd = 32'h7F <<  rd_i.addr              ;
+                    {LMUL_1, 3'b111}: pend_vd = 32'hFF <<  rd_i.addr              ;
+                    {LMUL_2, 3'b000}: pend_vd = 32'h03 << {rd_i.addr[4:1], 1'b0  };
+                    {LMUL_2, 3'b001}: pend_vd = 32'h0F << {rd_i.addr[4:1], 1'b0  };
+                    {LMUL_2, 3'b010}: pend_vd = 32'h3F << {rd_i.addr[4:1], 1'b0  };
+                    {LMUL_2, 3'b011}: pend_vd = 32'hFF << {rd_i.addr[4:1], 1'b0  };
+                    {LMUL_4, 3'b000}: pend_vd = 32'h0F << {rd_i.addr[4:2], 2'b00 };
+                    {LMUL_4, 3'b001}: pend_vd = 32'hFF << {rd_i.addr[4:2], 2'b00 };
+                    {LMUL_8, 3'b000}: pend_vd = 32'hFF << {rd_i.addr[4:3], 3'b000};
+                    default: ;
+                endcase
+            end else if (unit_i == UNIT_LSU) begin
                 unique case ({emul_i, mode_i.lsu.nfields})
                     {EMUL_1, 3'b000}: pend_vd = 32'h01 <<  rd_i.addr              ;
                     {EMUL_1, 3'b001}: pend_vd = 32'h03 <<  rd_i.addr              ;
@@ -70,11 +89,13 @@ module vproc_pending_wr #(
                     default: ;
                 endcase
             end
+            // workaround
+            // pend_vd = rd_i.vreg ? (32'hFFFF) : 32'b0;
         end
 
     `else
         always_comb begin
-        //only generate pending write if the register is actually used based on VL.  
+        //only generate pending write if the register is actually used based on VL.
         logic [3:0] vregs_used;
         pend_vd = DONT_CARE_ZERO ? '0 : 'x;
         vregs_used = ((vl_i) >> $clog2(VREG_W/8)); //returns (# vregs needed for VL - 1) as VL is (# bytes in vector - 1)
@@ -118,6 +139,8 @@ module vproc_pending_wr #(
                 {EMUL_8, 3'b000, 4'h7}: pend_vd = 32'hFF << {rd_i.addr[4:3], 3'b000};
                 default: ;
             endcase
+            // workaround
+            pend_vd = rd_i.vreg ? (32'hFFFF) : 32'b0;
         end else begin
             unique case ({emul_i, widenarrow_i == OP_NARROWING, vregs_used})
                 {EMUL_1, 1'b0, 4'h0},          //single width EMUL_1, 1 vreg used

@@ -34,6 +34,7 @@ module vproc_result #(
         input logic [XIF_ID_W-1:0]  fpu_res_id,
 
         `endif
+        input logic                 csr_res_acc,
 
         input  logic                result_csr_valid_i,
         output logic                result_csr_ready_o,
@@ -222,11 +223,13 @@ module vproc_result #(
     `else
     assign fpu_res_accepted = 1'b0;
     `endif
+    assign csr_res_accepted = csr_res_acc;
 
 
     always_comb begin
         next_id_d = next_id_q;
-        if ((xif_result_if.result_valid && xif_result_if.result_ready) || fpu_res_accepted) begin
+        // if ((xif_result_if.result_valid && xif_result_if.result_ready) || fpu_res_accepted) begin
+        if ((xif_result_if.result_valid && xif_result_if.result_ready) || fpu_res_accepted || csr_res_accepted) begin
             next_id_d = next_id_q + 1;
         end
     end

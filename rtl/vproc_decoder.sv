@@ -1400,7 +1400,7 @@ module vproc_decoder #(
                             widenarrow_o          = OP_SINGLEWIDTH;
                         end
 
-                        `ifdef RISCV_ZVE32F  
+                        `ifdef RISCV_ZVE32F
                         //Only include Zve32f instructions when FPU is enabled
                         //TODO: select rounding mode by adding extra read port to the F-CSR.  May need to confirm these flags are set correctly
                         //TODO: F reduction operations will need extra logic in the V-FPU
@@ -1525,7 +1525,7 @@ module vproc_decoder #(
                             mode_o.fpu.src_2_narrow = 1'b0;
                             widenarrow_o          = OP_SINGLEWIDTH;
                         end
-                        
+
                         {6'b001001, 3'b001},        // vfsgnjn VV
                         {6'b001001, 3'b101}: begin  // vfsgnjn VF
                             unit_o                = UNIT_FPU;
@@ -1566,9 +1566,9 @@ module vproc_decoder #(
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
                             widenarrow_o          = OP_SINGLEWIDTH;
-                        end 
-                        
-                        {6'b100001, 3'b101}: begin  // vfrdiv VF 
+                        end
+
+                        {6'b100001, 3'b101}: begin  // vfrdiv VF
                             unit_o                = UNIT_FPU;
                             mode_o.fpu.op         = DIV;
                             mode_o.fpu.op_mod     = 1'b0;
@@ -1782,7 +1782,7 @@ module vproc_decoder #(
                                     instr_illegal       = 1'b1;
                                 end
                             endcase
-                                            
+
                         end
 
                         {6'b010011, 3'b001}: begin  // FUNARY1 ENCODING
@@ -1801,7 +1801,7 @@ module vproc_decoder #(
                             rs1_o.vreg   = 1'b0; //rs1 is not a vector register, mark it so it does not cause illegal instruction with attempted reads
                             mode_o.fpu.op_reduction = 1'b0;
 
-                                            
+
                         end
 
                         /////////////////////////////
@@ -1856,9 +1856,9 @@ module vproc_decoder #(
 
                             fpr_wr_req_valid = 1'b1;
                             fpr_wr_req_addr_o = instr_vd;
-                            
+
                         end
-                        
+
                         {6'b010000, 3'b101}: begin  // VRFUNARY0
                             unique case (instr_i[24:20])
                                 5'b00000: begin     // vmv.s.f
@@ -1885,7 +1885,7 @@ module vproc_decoder #(
 
 
 
-                        `ifdef RISCV_ZVFH 
+                        `ifdef RISCV_ZVFH
                         //These instructions only become defined once SEW16 is defined for FP
                         {6'b110000, 3'b001},        // vfwadd VV TODO: (might need to upgrade fp_new for this)
                         {6'b110000, 3'b101}: begin  // vfwadd VF
@@ -2147,7 +2147,7 @@ module vproc_decoder #(
                             unit_o = UNIT_ELEM;
                             unique case (instr_i[19:15])
                                 5'b00000: begin
-                                            mode_o.elem.op = ELEM_XMV;    // vmv.x.s 
+                                            mode_o.elem.op = ELEM_XMV;    // vmv.x.s
                                             `ifndef OLD_VICUNA
                                             evl_pol             = EVL_1;
                                             `endif
@@ -2289,7 +2289,7 @@ module vproc_decoder #(
         `ifdef RISCV_ZVE32F
 
         end else if (unit_o == UNIT_FPU) begin
-            
+
             if (widenarrow_o == OP_SINGLEWIDTH) begin
                 //Only SEW32 (or SEW16) is supported for FPU instructions
                 unique case (vsew_i)
@@ -2348,11 +2348,11 @@ module vproc_decoder #(
                     default: ;
                 endcase
                 vl_o = vl_i;
-                
-                
+
+
 
             end else if (widenarrow_o == OP_WIDENING_EXT2) begin
-                // unlike other widening ops, for [s/z]ext.vf2, eew, emul, and vl are already set correctly     
+                // unlike other widening ops, for [s/z]ext.vf2, eew, emul, and vl are already set correctly
                 vsew_o = vsew_i;
                 unique case (lmul_i)
                     LMUL_F8,
@@ -2365,10 +2365,10 @@ module vproc_decoder #(
                     default: ;
                 endcase
                 vl_o = vl_i;
-                
-                
+
+
              end else if (widenarrow_o == OP_WIDENING_EXT4) begin
-                // unlike other widening ops, for [s/z]ext.vf4, eew, emul, and vl are already set correctly     
+                // unlike other widening ops, for [s/z]ext.vf4, eew, emul, and vl are already set correctly
                 vsew_o = vsew_i;
                 unique case (lmul_i)
                     LMUL_F8,
@@ -2381,8 +2381,8 @@ module vproc_decoder #(
                     default: ;
                 endcase
                 vl_o = vl_i;
-  
-                
+
+
             end else begin
                 // for widening or narrowing ops, eew and emul are increased to the next higher value,
                 // since those are the eew and emul that are used for the op itself; vl is doubled to
@@ -2435,7 +2435,7 @@ module vproc_decoder #(
     end
 
     // address masks (lower bits that must be 0) for registers based on EMUL:
-    logic [2:0] regaddr_mask, regaddr_mask_narrow, regaddr_mask_narrow_x4;
+    logic [2:0] regaddr_mask, regaddr_mask_lmul, regaddr_mask_narrow, regaddr_mask_narrow_x4;
     always_comb begin
         regaddr_mask           = DONT_CARE_ZERO ? '0 : 'x;
         regaddr_mask_narrow    = DONT_CARE_ZERO ? '0 : 'x;
@@ -2463,6 +2463,25 @@ module vproc_decoder #(
             end
             default: ;
         endcase
+        // For indexed loads (EMUL only implies to index vector register, not destination)
+        regaddr_mask_lmul      = DONT_CARE_ZERO ? '0 : 'x;
+        unique case (lmul_i)
+            LMUL_1: begin
+                regaddr_mask_lmul = 3'b000;
+            end
+            LMUL_2: begin
+                regaddr_mask_lmul = 3'b001;
+            end
+            LMUL_4: begin
+                regaddr_mask_lmul = 3'b011;
+            end
+            LMUL_8: begin
+                regaddr_mask_lmul = 3'b111;
+            end
+            default: begin
+                regaddr_mask_lmul = 3'b000;
+            end
+        endcase
     end
 
     // check validity of register addresses:
@@ -2477,7 +2496,11 @@ module vproc_decoder #(
             OP_SINGLEWIDTH: begin
                 vs1_invalid = (instr_vs1 & {2'b00, regaddr_mask       }) != 5'b0;
                 vs2_invalid = (instr_vs2 & {2'b00, regaddr_mask       }) != 5'b0;
-                vd_invalid  = (instr_vd  & {2'b00, regaddr_mask       }) != 5'b0;
+                if (unit_o == UNIT_LSU & mode_o.lsu.stride == LSU_INDEXED) begin
+                    vd_invalid  = (instr_vd  & {2'b00, regaddr_mask_lmul  }) != 5'b0;
+                end else begin
+                    vd_invalid  = (instr_vd  & {2'b00, regaddr_mask       }) != 5'b0;
+                end
             end
             OP_WIDENING: begin
                 vs1_invalid = (instr_vs1 & {2'b00, regaddr_mask_narrow}) != 5'b0;
@@ -2569,7 +2592,7 @@ module vproc_decoder #(
     `else
         assign vtype_invalid = vsew_i == VSEW_INVALID;
     `endif
-    
+
 
     // operation illegal (invalid vtype, invalid EMUL, or register addresses for the current configuration)
     logic op_illegal;

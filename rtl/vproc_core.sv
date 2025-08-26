@@ -75,8 +75,25 @@ module vproc_core import vproc_pkg::*; #(
         input logic[XIF_ID_W-1:0] fpu_res_id,
 
         `endif
+        input logic csr_res_acc,
 
-        output logic [31:0]              pend_vreg_wr_map_o
+        output logic [31:0]              pend_vreg_wr_map_o,
+        output logic [1:0] vsew_o,
+        output logic [2:0] lmul_o,
+        output logic [CFG_VL_W-1:0] vl_o,
+        output logic [2:0] instr_unit_o,
+        output logic [12:0] instr_mode_o,
+        output logic instr_valid_o,
+        output logic dec_valid_o,
+        output logic [31:0] dec_instr_o,
+        output logic issue_id_used_o,
+        output logic [XIF_ID_W -1:0] xif_issue_if_issue_req_id_o,
+        output logic [31:0] xif_issue_if_issue_req_instr_o,
+        output logic [XIF_ID_W -1:0] xif_commit_if_commit_id_o,
+        output logic [XIF_ID_W -1:0] dec_data_id_o,
+        output logic [1:0] instr_state_issue,
+        output logic [1:0] instr_state_commit,
+        output logic [1:0] instr_state_dec
     );
 
     if ((VREG_W & (VREG_W - 1)) != 0 || VREG_W < 64) begin
@@ -203,13 +220,19 @@ module vproc_core import vproc_pkg::*; #(
     ///////////////////////////////////////////////////////////////////////////
     // CONFIGURATION STATE AND CSR READ AND WRITES
 
-    cfg_vsew             vsew_q,     vsew_d;     // VSEW (single element width)
+    cfg_vsew             vsew_q /* verilator public */;
+    // logic [31:0]            vsew_q2 /* verilator public */;
+    // assign vsew_q2 = {30'b0, vsew_q};
+    assign vsew_o = vsew_q;
+    cfg_vsew             vsew_d;     // VSEW (single element width)
     cfg_lmul             lmul_q,     lmul_d;     // LMUL
+    assign lmul_o = lmul_q;
     logic [1:0]          agnostic_q, agnostic_d; // agnostic policy (vta & vma)
     logic                vl_0_q,     vl_0_d;     // set if VL == 0
     logic [CFG_VL_W-1:0] vl_q,       vl_d;       // VL * (VSEW / 8) - 1
     logic [CFG_VL_W  :0] vl_csr_q,   vl_csr_d;   // VL (intentionally CFG_VL_W+1 wide)
     logic [CFG_VL_W-1:0] vstart_q,   vstart_d;   // vector start index
+    assign vl_o = vl_q;
     cfg_vxrm             vxrm_q,     vxrm_d;     // fixed-point rounding mode
     logic                vxsat_q,    vxsat_d;    // fixed-point saturation flag
     always_ff @(posedge clk_i or negedge async_rst_n) begin : vproc_cfg_reg
@@ -280,6 +303,8 @@ module vproc_core import vproc_pkg::*; #(
 
     // signals for decoder and for decoder buffer
     logic        dec_ready,       dec_valid,       dec_clear;
+    assign dec_valid_o = dec_valid;
+    assign dec_instr_o = xif_issue_if.issue_req.instr;
     logic        dec_buf_valid_q, dec_buf_valid_d;
     decoder_data dec_data_q,      dec_data_d;
     always_ff @(posedge clk_i or negedge async_rst_n) begin : vproc_dec_buf_valid
@@ -307,9 +332,13 @@ module vproc_core import vproc_pkg::*; #(
     // by another instruction which is not complete
     logic instr_valid, issue_id_used;
     assign instr_valid = xif_issue_if.issue_valid & ~issue_id_used & source_xreg_valid;
+    assign instr_valid_o = instr_valid;
+    assign issue_id_used_o = issue_id_used;
 
     op_unit instr_unit;
+    assign instr_unit_o = instr_unit;
     op_mode instr_mode;
+    assign instr_mode_o = instr_mode;
     vproc_decoder #(
         .VREG_W             ( VREG_W                              ),
         .CFG_VL_W           ( CFG_VL_W                            ),
@@ -397,6 +426,8 @@ module vproc_core import vproc_pkg::*; #(
     end
 
     assign issue_id_used = instr_state_q[xif_issue_if.issue_req.id] != INSTR_INVALID;
+    assign xif_issue_if_issue_req_id_o = xif_issue_if.issue_req.id;
+    assign xif_issue_if_issue_req_instr_o = xif_issue_if.issue_req.instr;
 
     // Instruction complete signal for each pipeline
     logic [PIPE_CNT-1:0]               instr_complete_valid;
@@ -442,6 +473,13 @@ module vproc_core import vproc_pkg::*; #(
             instr_state_d    [xif_issue_if.issue_req.id] = INSTR_SPECULATIVE;
             instr_empty_res_d[xif_issue_if.issue_req.id] = ~xif_issue_if.issue_resp.writeback & ~xif_issue_if.issue_resp.loadstore;
         end
+        // else begin
+        //     if (~dec_valid & instr_valid) begin
+        //         dec_clear                    = 1'b1;
+        //         instr_state_d[dec_data_q.id] = INSTR_INVALID;
+        //         // instr_state_d[dec_data_d.id] = INSTR_INVALID;
+        //     end
+        // end
         // Only instructions that have already been offloaded or are being offloaded right now
         // can be committed.  Commit transactions for invalid IDs are ignored.
         if (xif_commit_if.commit_valid & (
@@ -771,7 +809,7 @@ module vproc_core import vproc_pkg::*; #(
         .CFG_VL_W       ( CFG_VL_W                ),
         .VREG_W         ( VREG_W                  ),
         .DONT_CARE_ZERO ( DONT_CARE_ZERO          )
-        
+
     ) queue_pending_wr (
         .vsew_i         ( queue_data_d.vsew       ),
         .emul_i         ( queue_data_d.emul       ),
@@ -1153,6 +1191,7 @@ module vproc_core import vproc_pkg::*; #(
         .fpu_res_acc               ( fpu_res_acc                ),
         .fpu_res_id                ( fpu_res_id                 ),
         `endif
+        .csr_res_acc               ( csr_res_acc                ),
         .result_csr_valid_i        ( result_csr_valid           ),
         .result_csr_ready_o        ( result_csr_ready           ),
         .result_csr_id_i           ( result_csr_id              ),
@@ -1163,9 +1202,17 @@ module vproc_core import vproc_pkg::*; #(
         .xif_result_if             ( xif_result_if              )
     );
 
+    assign xif_commit_if_commit_id_o = xif_commit_if.commit.id;
+    assign dec_data_id_o = dec_data_q.id;
+    assign instr_state_issue = instr_state_d[xif_issue_if_issue_req_id_o];
+    assign instr_state_commit = instr_state_d[xif_commit_if_commit_id_o];
+    assign instr_state_dec = instr_state_q[dec_data_id_o];
+
 
 `ifdef VPROC_SVA
 `include "vproc_core_sva.svh"
 `endif
+
+/* verilator public_module */
 
 endmodule
