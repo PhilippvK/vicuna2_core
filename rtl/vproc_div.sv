@@ -147,6 +147,7 @@ module vproc_div #(
 
     //Shifts + combinatins with buffer for outputs
     always_comb begin
+        
         unique case (unit_ctrl_q.eew)
                 VSEW_16 : begin 
                               result = {result_partial_d[(DIV_OP_W/2-1):0], result_partial_q[(DIV_OP_W/2-1):0]}; //Combine top half saved in buffer with current bottom half
@@ -157,7 +158,10 @@ module vproc_div #(
                               result = {result_partial_d[(DIV_OP_W/4-1):0], result_partial_q[(3*DIV_OP_W/4)-1:0]};                                             //Combine top 3/4 saved in buffer with current bottom 1/4
                               result_partial_d_shifted = {8'b00000000, result_partial_d[(DIV_OP_W/4)-1:0], result_partial_q[(3*DIV_OP_W/4)-1:(DIV_OP_W/4)] }; //put new data in position 2, previous pos 2/3 become new position 3/4
                         end
-                default : result = result_partial_d;                                                               //Result is already DIV_OP_W wide, pass directly
+                default : begin
+                    result = result_partial_d;                                                               //Result is already DIV_OP_W wide, pass directly
+                    result_partial_d_shifted = '0;
+                end
         endcase
     end
 
@@ -191,52 +195,56 @@ module vproc_div #(
     // DIV ARITHMETIC
     // Each div unit handles one 32 bit result.
 
+    //based on SEW and OP, select and extend the operands and pack the current set of outputs
+    always_comb begin
+        result_partial_d = '0;
+
+        for (integer g = 0; g < DIV_OP_W / 32; g++) begin
+            unique case ({unit_ctrl_q.eew, unit_ctrl_q.mode.div.op})
+                {VSEW_32, DIV_DIVU},
+                {VSEW_32, DIV_REMU},
+                {VSEW_32, DIV_DIV},
+                {VSEW_32, DIV_REM}: begin
+                    div_in_opa[32*g +: 32]  = opa_i_q[32*g +: 32];
+                    div_in_opb[32*g +: 32]  = opb_i_q[32*g +: 32];
+                    result_partial_d[32*g +: 32]    = div_out[32*g +: 32];
+                end
+                {VSEW_16, DIV_DIVU},
+                {VSEW_16, DIV_REMU}: begin
+                    div_in_opa[32*g +: 32]  = {16'b0,  opa_i_q[16*g +: 16]};
+                    div_in_opb[32*g +: 32]  = {16'b0,  opb_i_q[16*g +: 16]};
+                    result_partial_d[16*g +: 16]    = div_out[32*g +: 16];
+                end
+                {VSEW_16, DIV_DIV},
+                {VSEW_16, DIV_REM}: begin
+                    div_in_opa[32*g +: 32]  = {{16{opa_i_q[16*g + 15]}},  opa_i_q[16*g +: 16]};
+                    div_in_opb[32*g +: 32]  = {{16{opb_i_q[16*g + 15]}},  opb_i_q[16*g +: 16]};
+                    result_partial_d[16*g +: 16]    = div_out[32*g +: 16];
+                end
+                {VSEW_8, DIV_DIVU},
+                {VSEW_8, DIV_REMU}: begin
+                    div_in_opa[32*g +: 32]  = {24'b0,  opa_i_q[8*g +: 8]};
+                    div_in_opb[32*g +: 32]  = {24'b0,  opb_i_q[8*g +: 8]};
+                    result_partial_d[8*g +: 8]      = div_out[32*g +: 8];
+                end
+                {VSEW_8, DIV_DIV},
+                {VSEW_8, DIV_REM}: begin
+                    div_in_opa[32*g +: 32]  = {{24{opa_i_q[8*g + 7]}},  opa_i_q[8*g +: 8]};
+                    div_in_opb[32*g +: 32]  = {{24{opb_i_q[8*g + 7]}},  opb_i_q[8*g +: 8]};
+                    result_partial_d[8*g +: 8]      = div_out[32*g +: 8];
+                end
+                default: begin
+                    div_in_opa[32*g +: 32]  = 32'b0;
+                    div_in_opb[32*g +: 32]  = 32'b0;
+                    result_partial_d[32*g +: 32]    = 32'b0;
+                end
+            endcase
+        end
+    end
+
+    //generate div units
      generate
         for (genvar g = 0; g < DIV_OP_W / 32; g++) begin
-
-            //based on SEW and OP, select and extend the operands and pack the current set of outputs
-            always_comb begin
-                unique case ({unit_ctrl_q.eew, unit_ctrl_q.mode.div.op})
-                    {VSEW_32, DIV_DIVU},
-                    {VSEW_32, DIV_REMU},
-                    {VSEW_32, DIV_DIV},
-                    {VSEW_32, DIV_REM}: begin
-                        div_in_opa[32*g +: 32]  = opa_i_q[32*g +: 32];
-                        div_in_opb[32*g +: 32]  = opb_i_q[32*g +: 32];
-                        result_partial_d[32*g +: 32]    = div_out[32*g +: 32];
-                    end
-                    {VSEW_16, DIV_DIVU},
-                    {VSEW_16, DIV_REMU}: begin
-                        div_in_opa[32*g +: 32]  = {16'b0,  opa_i_q[16*g +: 16]};
-                        div_in_opb[32*g +: 32]  = {16'b0,  opb_i_q[16*g +: 16]};
-                        result_partial_d[16*g +: 16]    = div_out[32*g +: 16];
-                    end
-                    {VSEW_16, DIV_DIV},
-                    {VSEW_16, DIV_REM}: begin
-                        div_in_opa[32*g +: 32]  = {{16{opa_i_q[16*g + 15]}},  opa_i_q[16*g +: 16]};
-                        div_in_opb[32*g +: 32]  = {{16{opb_i_q[16*g + 15]}},  opb_i_q[16*g +: 16]};
-                        result_partial_d[16*g +: 16]    = div_out[32*g +: 16];
-                    end
-                    {VSEW_8, DIV_DIVU},
-                    {VSEW_8, DIV_REMU}: begin
-                        div_in_opa[32*g +: 32]  = {24'b0,  opa_i_q[8*g +: 8]};
-                        div_in_opb[32*g +: 32]  = {24'b0,  opb_i_q[8*g +: 8]};
-                        result_partial_d[8*g +: 8]      = div_out[32*g +: 8];
-                    end
-                    {VSEW_8, DIV_DIV},
-                    {VSEW_8, DIV_REM}: begin
-                        div_in_opa[32*g +: 32]  = {{24{opa_i_q[8*g + 7]}},  opa_i_q[8*g +: 8]};
-                        div_in_opb[32*g +: 32]  = {{24{opb_i_q[8*g + 7]}},  opb_i_q[8*g +: 8]};
-                        result_partial_d[8*g +: 8]      = div_out[32*g +: 8];
-                    end
-                    default: begin
-                        div_in_opa[32*g +: 32]  = 32'b0;
-                        div_in_opb[32*g +: 32]  = 32'b0;
-                        result_partial_d[32*g +: 32]    = 32'b0;
-                    end
-                endcase
-            end
-
 
             logic           div_en;               
             logic           div_clz_en;
