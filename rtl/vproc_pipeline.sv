@@ -546,7 +546,9 @@ module vproc_pipeline import vproc_pkg::*; #(
             op_load [i]       = state_q.op_load [i];
             op_flags[i].shift = state_q.op_flags[i].shift;
             if (state_q.op_load[i] & ~OP_DYN_ADDR[i]) begin
-                if (OP_NARROW[i] & state_q.op_flags[i].narrow) begin
+                if (OP_NARROW[i] & state_q.op_flags[i].vf4_ext) begin
+                    op_vaddr[i][0] = state_q.op_vaddr[i][0] | (OP_ALT_COUNTER[i] ? state_q.alt_count.part.mul[2] : state_q.count.part.mul[2]);
+                end else if (OP_NARROW[i] & state_q.op_flags[i].narrow) begin
                     op_vaddr[i][1:0] = state_q.op_vaddr[i][1:0] | (OP_ALT_COUNTER[i] ? state_q.alt_count.part.mul[2:1] : state_q.count.part.mul[2:1]);
                 end else begin
                     op_vaddr[i][2:0] = state_q.op_vaddr[i][2:0] | (OP_ALT_COUNTER[i] ? state_q.alt_count.part.mul      : state_q.count.part.mul     );
