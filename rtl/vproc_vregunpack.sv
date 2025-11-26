@@ -468,13 +468,10 @@ module vproc_vregunpack
         end
     endgenerate
 
-    // Operand extraction logic
-    logic [MAX_VPORT_W-1:0] op_buffer_verif;
-    
+    // Operand extraction logic   
     generate
         for (genvar i = 0; i < OP_CNT; i++) begin
             always_comb begin
-                op_buffer_verif = op_buffer[0];
                 // operand is lower part of operand buffer by default
                 op_data[i]              = DONT_CARE_ZERO ? '0 : 'x;
                 op_data[i][OP_W[i]-1:0] = op_buffer[i][OP_W[i]-1:0];
