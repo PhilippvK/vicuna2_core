@@ -416,6 +416,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
 
         if (unit_lsu) begin 
             state_init.count_inc = DONT_CARE_ZERO ? count_inc_e'('0) : count_inc_e'('x);
+            state_init.mode.lsu.alt_eew  = pipe_in_data_i.mode.lsu.eew;
+            state_init.mode.lsu.eew = pipe_in_data_i.mode.lsu.eew;
+
             unique case (pipe_in_data_i.mode.lsu.eew)
                 VSEW_8:  state_init.count_inc = COUNT_INC_1;
                 VSEW_16: state_init.count_inc = COUNT_INC_2;

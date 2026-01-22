@@ -309,6 +309,9 @@ module vproc_pipeline import vproc_pkg::*; #(
 
     // Counter increment logic
     always_comb begin
+        counter_t temp_alt_count;
+        temp_alt_count = state_q.alt_count;
+
         count_next_inc     = state_q.count;
         alt_count_next_inc = state_q.alt_count;
         if ((OP_DYN_ADDR == '0) | (state_q.aux_count == '1)) begin
@@ -330,21 +333,43 @@ module vproc_pipeline import vproc_pkg::*; #(
 
             unique case (state_q.alt_count_inc)
                 COUNT_INC_1: begin
-                    alt_count_next_inc.val = state_q.alt_count.val + COUNTER_W'(1);
+                    temp_alt_count.val = state_q.alt_count.val + COUNTER_W'(1);
                 end
                 COUNT_INC_2: begin
-                    alt_count_next_inc.val = state_q.alt_count.val + COUNTER_W'(2);
+                    temp_alt_count.val = state_q.alt_count.val + COUNTER_W'(2);
                 end
                 COUNT_INC_4: begin
-                    alt_count_next_inc.val = state_q.alt_count.val + COUNTER_W'(4);
+                    temp_alt_count.val = state_q.alt_count.val + COUNTER_W'(4);
                 end
                 COUNT_INC_MAX: begin
-                    alt_count_next_inc.val = state_q.alt_count.val + (1 << $clog2(MAX_OP_W/COUNTER_OP_W));
+                    temp_alt_count.val = state_q.alt_count.val + (1 << $clog2(MAX_OP_W/COUNTER_OP_W));
                 end
                 default: ;
-
-
             endcase
+
+            if (state_q.unit == UNIT_LSU & state_q.mode.lsu.alt_count_lsu_use) begin
+                unique case (state_q.mode.lsu.alt_emul)
+                    EMUL_1: begin
+                        alt_count_next_inc = temp_alt_count;
+                        alt_count_next_inc.part.mul &= 3'b000;
+                    end
+                    EMUL_2: begin
+                        alt_count_next_inc = temp_alt_count;
+                        alt_count_next_inc.part.mul &= 3'b001;
+                    end
+                    EMUL_4: begin
+                        alt_count_next_inc = temp_alt_count;
+                        alt_count_next_inc.part.mul &= 3'b011;
+                    end
+                    EMUL_8: begin
+                        alt_count_next_inc = temp_alt_count;
+                        alt_count_next_inc.part.mul &= 3'b111;
+                    end
+                    default: ;
+                endcase
+            end else begin
+                alt_count_next_inc = temp_alt_count;
+            end
         end
     end
 
@@ -410,15 +435,13 @@ module vproc_pipeline import vproc_pkg::*; #(
                default: ;
             endcase
 
-            if (state_q.mode.lsu.alt_count_lsu_use) begin
+            if (state_q.unit == UNIT_LSU & state_q.mode.lsu.alt_count_lsu_use) begin
                 unique case (state_q.mode.lsu.alt_emul)
                     EMUL_2: alt_last_cycle_next &= alt_count_next_inc.part.mul[  0] == '1;
                     EMUL_4: alt_last_cycle_next &= alt_count_next_inc.part.mul[1:0] == '1;
                     EMUL_8: alt_last_cycle_next &= alt_count_next_inc.part.mul[2:0] == '1;
                     default: ;
                 endcase
-
-                last_cycle_next |= alt_last_cycle_next;
             end
 
             `else
@@ -436,7 +459,7 @@ module vproc_pipeline import vproc_pkg::*; #(
             end
    
             `endif
-            if ((OP_ALT_COUNTER != '0) & state_q.count.part.sign & ~state_q.mode.lsu.alt_count_lsu_use) begin
+            if ((OP_ALT_COUNTER != '0) & state_q.count.part.sign & state_q.unit != UNIT_LSU) begin
                 last_cycle_next = '0;
             end
             if (aux_count_used & ((state_q.aux_count ^ AUX_COUNTER_W'(1)) != '1)) begin
@@ -481,7 +504,7 @@ module vproc_pipeline import vproc_pkg::*; #(
                         // if the alternative counter is used for some operands the counter's
                         // sign and MUL part might be invalid for the current EMUL, in which
                         // case the load needs to be suppressed
-                        if (OP_ALT_COUNTER != '0 && ~state_next.mode.lsu.alt_count_lsu_use) begin
+                        if (OP_ALT_COUNTER != '0 & state_next.unit != UNIT_LSU) begin
                             unique case (state_next.emul)
                                 EMUL_1: if (  op_count[i].val[COUNTER_W-1 -: 4]             != '0) begin
                                     op_load_next[i] = '0;
@@ -513,7 +536,7 @@ module vproc_pipeline import vproc_pkg::*; #(
                     end
                     // The amount of mask bits consumed each cycle depends on the element width
                     if ((op_count[i].val & ~({COUNTER_W{1'b1}} << $clog2(OP_W[i] / (COUNTER_OP_W / 8)))) == '0) begin
-                        if(OP_ALT_COUNTER[i] && state_next.mode.lsu.alt_count_lsu_use) begin
+                        if(OP_ALT_COUNTER[i] & state_q.unit == UNIT_LSU & state_next.mode.lsu.alt_count_lsu_use) begin
                           temp_eew = state_next.mode.lsu.alt_eew;
                         end
                         op_shift_next[i] = DONT_CARE_ZERO ? '0 : 'x;
@@ -548,7 +571,7 @@ module vproc_pipeline import vproc_pkg::*; #(
         // Changes to control flow to improve performance.  Introduces timing anomalies
         // Change how res_store is caculated to enable early stopping. Now depends on the current Vector Length
         `ifdef OLD_VICUNA
-        if ((count_next_inc.part.low == '0) & ((OP_ALT_COUNTER == '0) | ~state_q.count.part.sign) &
+        if ((count_next_inc.part.low == '0 | (state_q.last_cycle & state_q.mode.lsu.alt_count_lsu_use)) & ((OP_ALT_COUNTER == '0) | ~state_q.count.part.sign | ((OP_ALT_COUNTER != '0) & state_q.unit == UNIT_LSU)) &
            ((RES_ALWAYS_VREG | state_q.res_vreg) != '0) // at least one valid vreg
             ) begin
             res_store = ((RES_NARROW & state_q.res_narrow) == '0) | ~count_next_inc.part.mul[0];
@@ -594,7 +617,7 @@ module vproc_pipeline import vproc_pkg::*; #(
                     op_vaddr[i][2:0] = state_q.op_vaddr[i][2:0] | (OP_ALT_COUNTER[i] ? state_q.alt_count.part.mul      : state_q.count.part.mul     );
                 end
             end
-            if (OP_ALT_COUNTER[i] && ~state_q.mode.lsu.alt_count_lsu_use) begin
+            if (OP_ALT_COUNTER[i] & state_q.unit != UNIT_LSU) begin
                 op_flags[i].vreg = OP_ALWAYS_VREG[i] | state_q.op_flags[i].vreg;
                 unique case (state_q.emul)
                     EMUL_1: if (  state_q.alt_count.val[COUNTER_W-1 -: 4]             != '0) begin
@@ -672,12 +695,12 @@ module vproc_pipeline import vproc_pkg::*; #(
                     if ((OP_ALT_COUNTER != '0) 
                       & (OP_ALT_COUNTER[i] ? state_q.alt_count.part.sign : state_q.count.part.sign) 
                       & (OP_ALWAYS_VREG[i] | state_q.op_flags[i].vreg) 
-                      && ~state_q.mode.lsu.alt_count_lsu_use) begin
+                      & state_q.unit != UNIT_LSU) begin
                         op_pend_reads[i] = (OP_SRC[i] >= VPORT_CNT) ? '0 : (32'b1 << state_q.op_vaddr[i]);
                     end
                 end
                 // TODO guard with VPORT_ADDR_ZERO[OP_SRC[i]]
-                else if (OP_ALT_COUNTER[i]) begin
+                else if (OP_ALT_COUNTER[i] & state_q.unit != UNIT_LSU) begin
                     //if (OP_ALWAYS_VREG[i] | state_q.op_flags[i].vreg) begin
                         op_pend_reads[i] = DONT_CARE_ZERO ? '0 : 'x;
                         unique case ({state_q.emul, OP_NARROW[i] & state_q.op_flags[i].narrow})
@@ -692,23 +715,6 @@ module vproc_pipeline import vproc_pkg::*; #(
                             default: ;
                         endcase
                     //end
-                    
-                    if (state_q.mode.lsu.alt_count_lsu_use) begin
-                        if (OP_ALWAYS_VREG[i] | state_q.op_flags[i].vreg) begin
-                            op_pend_reads[i] = DONT_CARE_ZERO ? '0 : 'x;
-                            unique case ({state_q.mode.lsu.alt_emul, OP_NARROW[i] & state_q.op_flags[i].narrow})
-                                {EMUL_1, 1'b1},
-                                {EMUL_1, 1'b0},
-                                {EMUL_2, 1'b1}: op_pend_reads[i] = '0;
-                                {EMUL_2, 1'b0}: op_pend_reads[i] = (32'h03 & (32'h02 << state_q.alt_count.part.mul[2:0])) << {state_q.op_vaddr[i][4:1], 1'b0};
-                                {EMUL_4, 1'b1}: op_pend_reads[i] = (32'h03 & (32'h02 << state_q.alt_count.part.mul[2:1])) << {state_q.op_vaddr[i][4:1], 1'b0};
-                                {EMUL_4, 1'b0}: op_pend_reads[i] = (32'h0F & (32'h0E << state_q.alt_count.part.mul[2:0])) << {state_q.op_vaddr[i][4:2], 2'b0};
-                                {EMUL_8, 1'b1}: op_pend_reads[i] = (32'h0F & (32'h0E << state_q.alt_count.part.mul[2:1])) << {state_q.op_vaddr[i][4:2], 2'b0};
-                                {EMUL_8, 1'b0}: op_pend_reads[i] = (32'hFF & (32'hFE << state_q.alt_count.part.mul[2:0])) << {state_q.op_vaddr[i][4:3], 3'b0};
-                                default: ;
-                            endcase
-                        end
-                    end
 
                 end
                 //else if (OP_ALT_COUNTER != '0) begin
@@ -727,7 +733,22 @@ module vproc_pipeline import vproc_pkg::*; #(
                             {EMUL_8, 1'b0}: op_pend_reads[i] = (32'hFF & (32'hFE << state_q.count.part.mul[2:0])) << {state_q.op_vaddr[i][4:3], 3'b0};
                             default: ;
                         endcase
+
+                        if (OP_ALT_COUNTER[i]) begin
+                            unique case ({state_q.mode.lsu.alt_emul, OP_NARROW[i] & state_q.op_flags[i].narrow})
+                                {EMUL_1, 1'b1},
+                                {EMUL_1, 1'b0},
+                                {EMUL_2, 1'b1}: op_pend_reads[i] = '0;
+                                {EMUL_2, 1'b0}: op_pend_reads[i] = (32'h03 & (32'h02 << state_q.alt_count.part.mul[2:0])) << {state_q.op_vaddr[i][4:1], 1'b0};
+                                {EMUL_4, 1'b1}: op_pend_reads[i] = (32'h03 & (32'h02 << state_q.alt_count.part.mul[2:1])) << {state_q.op_vaddr[i][4:1], 1'b0};
+                                {EMUL_4, 1'b0}: op_pend_reads[i] = (32'h0F & (32'h0E << state_q.alt_count.part.mul[2:0])) << {state_q.op_vaddr[i][4:2], 2'b0};
+                                {EMUL_8, 1'b1}: op_pend_reads[i] = (32'h0F & (32'h0E << state_q.alt_count.part.mul[2:1])) << {state_q.op_vaddr[i][4:2], 2'b0};
+                                {EMUL_8, 1'b0}: op_pend_reads[i] = (32'hFF & (32'hFE << state_q.alt_count.part.mul[2:0])) << {state_q.op_vaddr[i][4:3], 3'b0};
+                                default: ;
+                            endcase
+                        end
                     end
+
                 end
             end
         end
@@ -835,7 +856,7 @@ module vproc_pipeline import vproc_pkg::*; #(
         unpack_ctrl.init_addr       = state_q.init_addr;
         unpack_ctrl.requires_flush  = state_q.requires_flush;
         unpack_ctrl.alt_count_valid = DONT_CARE_ZERO ? '0 : 'x;
-        if (~state_q.mode.lsu.alt_count_lsu_use) begin
+        if (state_q.unit != UNIT_LSU) begin
             unique case (state_q.emul)
                 EMUL_1: unpack_ctrl.alt_count_valid =   state_q.alt_count.val[COUNTER_W-1 -: 4]             == '0;
                 EMUL_2: unpack_ctrl.alt_count_valid = ((state_q.alt_count.val[COUNTER_W-1 -: 4]) & 4'b1110) == '0;

@@ -388,10 +388,10 @@ module vproc_vregunpack
         for (int i = 0; i < OP_CNT; i++) begin
             op_load         [i] = stage_state[OP_STAGE[i]    ].op_load[i];
             op_load_flags   [i] = stage_state[OP_STAGE[i]    ].op_flags[i];
-            op_load_eew     [i] = stage_state[OP_STAGE[i]    ].alt_count_lsu_use && OP_ALT_COUNTER[i] ? stage_state[OP_STAGE[i]    ].alt_eew : stage_state[OP_STAGE[i]    ].eew;
+            op_load_eew     [i] = stage_state[OP_STAGE[i]    ].alt_count_lsu_use & OP_ALT_COUNTER[i] ? stage_state[OP_STAGE[i]    ].alt_eew : stage_state[OP_STAGE[i]    ].eew;
             op_buffer       [i] = stage_state[OP_STAGE[i] + 1].op_buffer[i];
             op_extract_flags[i] = stage_state[OP_STAGE[i] + 1].op_flags[i];
-            op_extract_eew  [i] = stage_state[OP_STAGE[i]    ].alt_count_lsu_use && OP_ALT_COUNTER[i] ? stage_state[OP_STAGE[i]    ].alt_eew : stage_state[OP_STAGE[i]    ].eew;
+            op_extract_eew  [i] = stage_state[OP_STAGE[i]    ].alt_count_lsu_use & OP_ALT_COUNTER[i] ? stage_state[OP_STAGE[i]    ].alt_eew : stage_state[OP_STAGE[i]    ].eew;
             op_xval         [i] = stage_state[OP_STAGE[i] + 1].op_xval[i];
         end
     end
