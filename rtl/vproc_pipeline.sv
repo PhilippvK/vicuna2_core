@@ -771,6 +771,8 @@ module vproc_pipeline import vproc_pkg::*; #(
                 endcase
             end
         end
+  
+        op_fields_pend_reads |=  (state_q.field_count > 0 & state_q.mode.lsu.masked) ? 32'h1 : 32'h0;
     end
 
     logic [31:0] op_pend_reads_all;
