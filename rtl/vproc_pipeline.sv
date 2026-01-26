@@ -130,6 +130,7 @@ module vproc_pipeline import vproc_pkg::*; #(
         count_inc_e                      count_inc;      // counter increment policy
         logic        [AUX_COUNTER_W-1:0] aux_count;      // auxiliary counter (for dyn addr ops)
         logic                      [2:0] field_count;    // field counter (for segment loads/stores)
+        logic                            first_iter;
         logic                            first_cycle;
         logic                            last_cycle;
         logic                            alt_last_cycle;
@@ -243,6 +244,7 @@ module vproc_pipeline import vproc_pkg::*; #(
                     state_next.aux_count = '0;
                 end
             end
+            state_next.first_iter              = 1;
             state_next.field_count             = pipe_in_state_i.field_count_init;
             state_next.first_cycle             = 1'b1;
             state_next.init_addr               = 1'b1;
@@ -276,6 +278,7 @@ module vproc_pipeline import vproc_pkg::*; #(
                 state_next.alt_count   = '0;
                 state_next.field_count = state_q.field_count - 3'b001;
                 state_next.xval        = DONT_CARE_ZERO ? '0 : 'x;
+                state_next.first_iter  = 0;
                 unique case (state_q.eew)
                     VSEW_8:  state_next.xval = state_q.xval + 32'h1;
                     VSEW_16: state_next.xval = state_q.xval + 32'h2;
@@ -478,8 +481,6 @@ module vproc_pipeline import vproc_pkg::*; #(
     end
 
     always_comb begin
-        cfg_vsew temp_eew;
-        temp_eew = state_next.eew;
         op_load_next  = '0;
         op_shift_next = '0;
         for (int i = 0; i < OP_CNT; i++) begin
@@ -536,11 +537,8 @@ module vproc_pipeline import vproc_pkg::*; #(
                     end
                     // The amount of mask bits consumed each cycle depends on the element width
                     if ((op_count[i].val & ~({COUNTER_W{1'b1}} << $clog2(OP_W[i] / (COUNTER_OP_W / 8)))) == '0) begin
-                        if(OP_ALT_COUNTER[i] & state_q.unit == UNIT_LSU & state_next.mode.lsu.alt_count_lsu_use) begin
-                          temp_eew = state_next.mode.lsu.alt_eew;
-                        end
                         op_shift_next[i] = DONT_CARE_ZERO ? '0 : 'x;
-                        unique case (temp_eew)
+                        unique case (state_next.eew)
                             VSEW_8:  op_shift_next[i] = 1'b1;
                             VSEW_16: op_shift_next[i] = op_count[i].val[$clog2(OP_W[i] / (COUNTER_OP_W / 8))     ] == '0;
                             VSEW_32: op_shift_next[i] = op_count[i].val[$clog2(OP_W[i] / (COUNTER_OP_W / 8)) +: 2] == '0;
@@ -772,7 +770,7 @@ module vproc_pipeline import vproc_pkg::*; #(
             end
         end
   
-        op_fields_pend_reads |=  (state_q.field_count > 0 & state_q.mode.lsu.masked) ? 32'h1 : 32'h0;
+        //op_fields_pend_reads |=  (state_q.field_count > 0 & state_q.mode.lsu.masked) ? 32'h1 : 32'h0;
     end
 
     logic [31:0] op_pend_reads_all;
@@ -785,6 +783,9 @@ module vproc_pipeline import vproc_pkg::*; #(
                     op_pend_reads_all |= op_addr_offset_pend_reads;
                 end else begin
                     op_pend_reads_all[(OP_SRC[i] >= VPORT_CNT) ? '0 : op_vaddr[i]] = 1'b1;
+                    if(OP_MASK[i] & ~state_q.first_iter) begin
+                        op_pend_reads_all[(OP_SRC[i] >= VPORT_CNT) ? '0 : op_vaddr[i]] = 1'b0;
+                    end
                 end
             end
         end
@@ -1004,7 +1005,8 @@ module vproc_pipeline import vproc_pkg::*; #(
         .pipe_in_valid_i      ( unpack_valid                 ),
         .pipe_in_ready_o      ( unpack_ready                 ),
         .pipe_in_ctrl_i       ( unpack_ctrl                  ),
-        .pipe_in_alt_lsu_use_i( state_q.mode.lsu.alt_count_lsu_use    ),
+        .pipe_in_first_iter_i ( state_q.first_iter           ),
+        .pipe_in_alt_count_lsu_use_i( state_q.mode.lsu.alt_count_lsu_use    ),
         .pipe_in_alt_eew_i    ( state_q.mode.lsu.alt_eew              ),
         .pipe_in_eew_i        ( unpack_ctrl.eew              ),
         .pipe_in_op_load_i    ( op_load                      ),

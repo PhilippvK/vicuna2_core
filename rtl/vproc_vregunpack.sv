@@ -50,7 +50,8 @@ module vproc_vregunpack
         input  logic                                  pipe_in_valid_i,
         output logic                                  pipe_in_ready_o,
         input  logic               [CTRL_DATA_W-1:0]  pipe_in_ctrl_i,       // pipeline control sigs
-        input  logic                                  pipe_in_alt_lsu_use_i,
+        input  logic                                  pipe_in_first_iter_i,
+        input  logic                                  pipe_in_alt_count_lsu_use_i,
         input  vproc_pkg::cfg_vsew                    pipe_in_alt_eew_i,
         input  vproc_pkg::cfg_vsew                    pipe_in_eew_i,        // current element width
         input  logic   [OP_CNT-1:0]                   pipe_in_op_load_i,    // load signals of ops
@@ -109,6 +110,7 @@ module vproc_vregunpack
         logic   [OP_CNT-1:0][31           :0] op_xval;
         logic   [OP_CNT-1:0][MAX_VPORT_W-1:0] op_buffer;
         logic   [OP_CNT-1:0][MAX_OP_W   -1:0] op_data;
+        logic   [OP_CNT-1:0]                  op_first_iter;
     } vregunpack_state_t;
 
     vregunpack_state_t stage_0;
@@ -116,23 +118,25 @@ module vproc_vregunpack
         stage_0          = vregunpack_state_t'(DONT_CARE_ZERO ? '0 : 'x);
         `ifdef OLD_VICUNA
         stage_0.ctrl     = pipe_in_ctrl_i;
-        stage_0.alt_count_lsu_use = pipe_in_alt_lsu_use_i;
+        stage_0.alt_count_lsu_use = pipe_in_alt_count_lsu_use_i;
         stage_0.alt_eew  = pipe_in_alt_eew_i;
         stage_0.eew      = pipe_in_eew_i;
         stage_0.op_load  = pipe_in_op_load_i;
         stage_0.op_vaddr = pipe_in_op_vaddr_i;
         stage_0.op_flags = pipe_in_op_flags_i;
         stage_0.op_xval  = pipe_in_op_xval_i;
+        stage_0.op_first_iter = pipe_in_first_iter_i;
         `else
         if (pipe_in_ready_o & pipe_in_valid_i) begin
             stage_0.ctrl     = pipe_in_ctrl_i;
-            stage_0.alt_count_lsu_use = pipe_in_alt_lsu_use_i;
+            stage_0.alt_count_lsu_use = pipe_in_alt_count_lsu_use_i;
             stage_0.alt_eew  = pipe_in_alt_eew_i;
             stage_0.eew      = pipe_in_eew_i;
             stage_0.op_load  = pipe_in_op_load_i;
             stage_0.op_vaddr = pipe_in_op_vaddr_i;
             stage_0.op_flags = pipe_in_op_flags_i;
             stage_0.op_xval  = pipe_in_op_xval_i;
+            stage_0.op_first_iter = pipe_in_first_iter_i;
         end
         `endif
     end
@@ -143,6 +147,7 @@ module vproc_vregunpack
     logic              [UNPACK_STAGES:0] stage_valid, stage_valid_q, stage_valid_d;
     vregunpack_state_t [UNPACK_STAGES:0] stage_state, stage_state_q, stage_state_d;
     logic              [UNPACK_STAGES:0] stage_ready;
+    logic              [OP_CNT-1:0][MAX_VPORT_W-1:0] mask_buffer_q, mask_buffer_d;
 
     always_ff @(posedge clk_i or negedge async_rst_ni) begin
         if (~async_rst_ni) begin
@@ -157,6 +162,7 @@ module vproc_vregunpack
     end
     always_ff @(posedge clk_i) begin
         stage_state_q <= stage_state_d;
+        mask_buffer_q <= mask_buffer_d;
     end
 
     always_comb begin
@@ -175,6 +181,7 @@ module vproc_vregunpack
     // Operand buffers next-state signal and extracted operand data
     logic [OP_CNT-1:0][MAX_VPORT_W-1:0] op_buffer_next;
     logic [OP_CNT-1:0][MAX_OP_W   -1:0] op_data;
+    logic [OP_CNT-1:0][MAX_VPORT_W-1:0] mask_buffer_next;
 
     always_comb begin
         stage_valid_d = stage_valid_q;
@@ -213,6 +220,8 @@ module vproc_vregunpack
                 end
             end
         end
+
+        mask_buffer_d = mask_buffer_next;
     end
 
     always_comb begin
@@ -384,6 +393,9 @@ module vproc_vregunpack
     FLAGS_T  [OP_CNT-1:0]                  op_extract_flags;
     cfg_vsew [OP_CNT-1:0]                  op_extract_eew;
     logic    [OP_CNT-1:0][31           :0] op_xval;
+    logic    [OP_CNT-1:0]                  op_first_iter;
+
+    logic    [OP_CNT-1:0][MAX_VPORT_W-1:0] mask_buffer;
     always_comb begin
         for (int i = 0; i < OP_CNT; i++) begin
             op_load         [i] = stage_state[OP_STAGE[i]    ].op_load[i];
@@ -393,7 +405,11 @@ module vproc_vregunpack
             op_extract_flags[i] = stage_state[OP_STAGE[i] + 1].op_flags[i];
             op_extract_eew  [i] = stage_state[OP_STAGE[i]    ].alt_count_lsu_use & OP_ALT_COUNTER[i] ? stage_state[OP_STAGE[i]    ].alt_eew : stage_state[OP_STAGE[i]    ].eew;
             op_xval         [i] = stage_state[OP_STAGE[i] + 1].op_xval[i];
+            op_first_iter   [i] = stage_state[OP_STAGE[i]  + 1].op_first_iter;
+
+            mask_buffer     [i] = mask_buffer_q[i];
         end
+
     end
 
     // Operand buffer update logic
@@ -460,6 +476,10 @@ module vproc_vregunpack
             localparam int unsigned OP_VPORT_W = (OP_SRC[i] < VPORT_CNT) ? VPORT_W[OP_SRC[i]] :
                                                                            VPORT_V0_W;
             always_comb begin
+                if (OP_MASK[i]) begin
+                    mask_buffer_next[i] = mask_buffer[i];
+                end
+
                 // by default, retain current value for upper part and assign default value for
                 // lower part
                 op_buffer_next[i] = {op_buffer[i][MAX_VPORT_W-1:OP_W[i]], op_default};
@@ -473,10 +493,22 @@ module vproc_vregunpack
                 // load signal overrides all others and moves vreg value into buffer
                 if (op_load[i]) begin
                     op_buffer_next[i][OP_VPORT_W-1:0] = op_vreg_data[i][OP_VPORT_W-1:0];
+
+                    if(OP_MASK[i]) begin
+                        if(~op_first_iter[i]) begin
+                            op_buffer_next[i][OP_VPORT_W-1:0] = mask_buffer[i][OP_VPORT_W-1:0];
+                        end else begin
+                            mask_buffer_next[i][OP_VPORT_W-1:0] = op_vreg_data[i][OP_VPORT_W-1:0];
+                        end
+                    end
+
                 end
+
             end
+
         end
     endgenerate
+
 
     // Operand extraction logic   
     generate
