@@ -228,13 +228,15 @@ module vproc_alu #(
                 // the result if the bit that is shifted out was set.
                 unique case (pipe_in_ctrl_i.vxrm)
                     // round-to-nearest-up: always carry in
-                    VXRM_RNU: carry_in_mask[i] =  operand1_9bpb[9*i] | operand2_9bpb[9*i];
+                    VXRM_RNU: carry_in_mask[i] = operand1_9bpb[9*i] | operand2_9bpb[9*i];
                     // round-to-nearest-even: carry in if the shifted result (w/o carry) would be odd
-                    VXRM_RNE: carry_in_mask[i] = (operand1_9bpb[9*i] | operand2_9bpb[9*i]) & (operand1_9bpb[9*i+1] != operand2_9bpb[9*i+1]);
+                    VXRM_RNE: carry_in_mask[i] = (operand1_9bpb[9*i] & operand2_9bpb[9*i]) | 
+                                                 ((operand1_9bpb[9*i] ^ operand2_9bpb[9*i]) & (operand1_9bpb[9*i+1] != operand2_9bpb[9*i+1]));
                     // round-down: no carry in
-                    VXRM_RDN: carry_in_mask[i] =  operand1_9bpb[9*i] & operand2_9bpb[9*i];
+                    VXRM_RDN: carry_in_mask[i] = operand1_9bpb[9*i] & operand2_9bpb[9*i];
                     // round-to-odd: carry in if the shifted result (w/o carry) would be even
-                    VXRM_ROD: carry_in_mask[i] = (operand1_9bpb[9*i] | operand2_9bpb[9*i]) & (operand1_9bpb[9*i+1] == operand2_9bpb[9*i+1]);
+                    VXRM_ROD: carry_in_mask[i] = (operand1_9bpb[9*i] & operand2_9bpb[9*i]) | 
+                                                 ((operand1_9bpb[9*i] ^ operand2_9bpb[9*i]) & (operand1_9bpb[9*i+1] == operand2_9bpb[9*i+1]));
                     default: ;
                 endcase
             end
