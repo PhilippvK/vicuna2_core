@@ -22,7 +22,7 @@
             end
             assert property (
                 @(posedge clk_i)
-                $rose(vreg_pend_rd_o[g]) |-> (state_q.first_cycle | $fell(state_q.pend_vreg_wr[g]) | state_q.mode.lsu.alt_count_lsu_use)
+                $rose(vreg_pend_rd_o[g]) |-> (state_q.first_cycle | $fell(state_q.pend_vreg_wr[g]))
             ) else begin
                 $error("pending read for vreg %d added midway", g);
             end

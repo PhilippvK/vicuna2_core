@@ -312,9 +312,6 @@ module vproc_pipeline import vproc_pkg::*; #(
 
     // Counter increment logic
     always_comb begin
-        counter_t temp_alt_count;
-        temp_alt_count = state_q.alt_count;
-
         count_next_inc     = state_q.count;
         alt_count_next_inc = state_q.alt_count;
         if ((OP_DYN_ADDR == '0) | (state_q.aux_count == '1)) begin
@@ -336,43 +333,19 @@ module vproc_pipeline import vproc_pkg::*; #(
 
             unique case (state_q.alt_count_inc)
                 COUNT_INC_1: begin
-                    temp_alt_count.val = state_q.alt_count.val + COUNTER_W'(1);
+                    alt_count_next_inc.val = state_q.alt_count.val + COUNTER_W'(1);
                 end
                 COUNT_INC_2: begin
-                    temp_alt_count.val = state_q.alt_count.val + COUNTER_W'(2);
+                    alt_count_next_inc.val = state_q.alt_count.val + COUNTER_W'(2);
                 end
                 COUNT_INC_4: begin
-                    temp_alt_count.val = state_q.alt_count.val + COUNTER_W'(4);
+                    alt_count_next_inc.val = state_q.alt_count.val + COUNTER_W'(4);
                 end
                 COUNT_INC_MAX: begin
-                    temp_alt_count.val = state_q.alt_count.val + (1 << $clog2(MAX_OP_W/COUNTER_OP_W));
+                    alt_count_next_inc.val = state_q.alt_count.val + (1 << $clog2(MAX_OP_W/COUNTER_OP_W));
                 end
                 default: ;
             endcase
-
-            if (state_q.unit == UNIT_LSU & state_q.mode.lsu.alt_count_lsu_use) begin
-                unique case (state_q.mode.lsu.alt_emul)
-                    EMUL_1: begin
-                        alt_count_next_inc = temp_alt_count;
-                        alt_count_next_inc.part.mul &= 3'b000;
-                    end
-                    EMUL_2: begin
-                        alt_count_next_inc = temp_alt_count;
-                        alt_count_next_inc.part.mul &= 3'b001;
-                    end
-                    EMUL_4: begin
-                        alt_count_next_inc = temp_alt_count;
-                        alt_count_next_inc.part.mul &= 3'b011;
-                    end
-                    EMUL_8: begin
-                        alt_count_next_inc = temp_alt_count;
-                        alt_count_next_inc.part.mul &= 3'b111;
-                    end
-                    default: ;
-                endcase
-            end else begin
-                alt_count_next_inc = temp_alt_count;
-            end
         end
     end
 
@@ -517,6 +490,15 @@ module vproc_pipeline import vproc_pkg::*; #(
                                     op_load_next[i] = '0;
                                 end
                                 EMUL_8: if (((op_count[i].val[COUNTER_W-1 -: 4]) & 4'b1000) != '0) begin
+                                    op_load_next[i] = '0;
+                                end
+                                default: ;
+                            endcase
+                        end
+
+                        if (OP_ALT_COUNTER[i] & state_next.unit == UNIT_LSU & state_next.mode.lsu.alt_count_lsu_use) begin
+                            unique case (state_next.mode.lsu.alt_emul)
+                                EMUL_1: if (  op_count[i].val != '0) begin
                                     op_load_next[i] = '0;
                                 end
                                 default: ;
