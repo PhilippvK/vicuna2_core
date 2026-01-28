@@ -497,6 +497,7 @@ module vproc_pipeline import vproc_pkg::*; #(
                         end
 
                         if (OP_ALT_COUNTER[i] & state_next.unit == UNIT_LSU & state_next.mode.lsu.alt_count_lsu_use) begin
+                            // suppress load for index register since in case of fractional lmuls it could load register twice
                             unique case (state_next.mode.lsu.alt_emul)
                                 EMUL_1: if (  op_count[i].val != '0) begin
                                     op_load_next[i] = '0;
@@ -715,6 +716,8 @@ module vproc_pipeline import vproc_pkg::*; #(
                         endcase
 
                         if (OP_ALT_COUNTER[i]) begin
+                            // for indexed accesses we need to use alt emul
+                            // if not indexed access alt_emul = emul
                             unique case ({state_q.mode.lsu.alt_emul, OP_NARROW[i] & state_q.op_flags[i].narrow})
                                 {EMUL_1, 1'b1},
                                 {EMUL_1, 1'b0},
@@ -766,6 +769,9 @@ module vproc_pipeline import vproc_pkg::*; #(
                 end else begin
                     op_pend_reads_all[(OP_SRC[i] >= VPORT_CNT) ? '0 : op_vaddr[i]] = 1'b1;
                     if(OP_MASK[i] & ~state_q.first_iter) begin
+                        // in case we have a segmented instruction we need to clear
+                        // a pending read since the saved mask register is used instead
+                        // of accesing the register file
                         op_pend_reads_all[(OP_SRC[i] >= VPORT_CNT) ? '0 : op_vaddr[i]] = 1'b0;
                     end
                 end

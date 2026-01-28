@@ -432,7 +432,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
 
                 state_init.mode.lsu.alt_count_lsu_use = 1;
                 
-                // swap values since ei instead of e
+                // swap values since calculated eew and emul are for indexed register
+                // and the default values stored in alt are for data register
                 state_init.mode.lsu.alt_eew  = pipe_in_data_i.mode.lsu.eew;
                 state_init.mode.lsu.eew = pipe_in_data_i.mode.lsu.alt_eew;
                 state_init.eew = pipe_in_data_i.mode.lsu.alt_eew;

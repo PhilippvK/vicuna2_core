@@ -496,8 +496,10 @@ module vproc_vregunpack
 
                     if(OP_MASK[i]) begin
                         if(~op_first_iter[i]) begin
+                            // segmented instruction therefore load mask from buffered mask register
                             op_buffer_next[i][OP_VPORT_W-1:0] = mask_buffer[i][OP_VPORT_W-1:0];
                         end else begin
+                            // store mask in case of segmented instruction
                             mask_buffer_next[i][OP_VPORT_W-1:0] = op_vreg_data[i][OP_VPORT_W-1:0];
                         end
                     end

@@ -71,6 +71,7 @@ module vproc_pending_wr #(
                 endcase
 
                 if(mode_i.lsu.stride == LSU_INDEXED) begin
+                    // for index stride the lmul for data is stored in alt
                     unique case ({mode_i.lsu.alt_emul, mode_i.lsu.nfields})
                         {EMUL_1, 3'b000}: pend_vd = 32'h01 <<  rd_i.addr              ;
                         {EMUL_1, 3'b001}: pend_vd = 32'h03 <<  rd_i.addr              ;

@@ -287,6 +287,9 @@ module vproc_decoder #(
                     end
                     2'b01,
                     2'b11: begin // indexed load/store
+
+                        // store data sew and lmul in alt signal
+                        // index sew and lmul are stored in eew and emul
                         mode_o.lsu.stride            = LSU_INDEXED;
                         mode_o.lsu.alt_eew           = vsew_i;
                         rs2_o.vreg                   = 1'b1;
@@ -2306,6 +2309,8 @@ module vproc_decoder #(
             endcase
 
             if(mode_o.lsu.stride == LSU_INDEXED) begin
+                // vl does not need to be scaled since for indexed stride
+                // we use default sew and lmul
             	vl_o = vl_i;
             end
 
@@ -2491,6 +2496,8 @@ module vproc_decoder #(
         endcase
 
         if(mode_o.lsu.stride == LSU_INDEXED) begin
+            // since for indexed stride we use the default lmul
+            // we need to adapt the mask 
             unique case (lmul_i)
                 LMUL_F8,
                 LMUL_F4,
@@ -2527,6 +2534,8 @@ module vproc_decoder #(
                 vd_invalid  = (instr_vd  & {2'b00, regaddr_mask       }) != 5'b0;
 
                 if(mode_o.lsu.stride == LSU_INDEXED) begin
+                    // since for indexed stride we use the default lmul
+                    // we use the adapted mask 
                     vd_invalid  = (instr_vd  & {2'b00, regaddr_mask_index_vd       }) != 5'b0;
                 end
             end
