@@ -130,7 +130,6 @@ module vproc_pipeline import vproc_pkg::*; #(
         count_inc_e                      count_inc;      // counter increment policy
         logic        [AUX_COUNTER_W-1:0] aux_count;      // auxiliary counter (for dyn addr ops)
         logic                      [2:0] field_count;    // field counter (for segment loads/stores)
-        logic                            first_iter;
         logic                            first_cycle;
         logic                            last_cycle;
         logic                            alt_last_cycle;
@@ -244,7 +243,6 @@ module vproc_pipeline import vproc_pkg::*; #(
                     state_next.aux_count = '0;
                 end
             end
-            state_next.first_iter              = 1;
             state_next.field_count             = pipe_in_state_i.field_count_init;
             state_next.first_cycle             = 1'b1;
             state_next.init_addr               = 1'b1;
@@ -278,7 +276,6 @@ module vproc_pipeline import vproc_pkg::*; #(
                 state_next.alt_count   = '0;
                 state_next.field_count = state_q.field_count - 3'b001;
                 state_next.xval        = DONT_CARE_ZERO ? '0 : 'x;
-                state_next.first_iter  = 0;
                 unique case (state_q.eew)
                     VSEW_8:  state_next.xval = state_q.xval + 32'h1;
                     VSEW_16: state_next.xval = state_q.xval + 32'h2;
@@ -768,12 +765,6 @@ module vproc_pipeline import vproc_pkg::*; #(
                     op_pend_reads_all |= op_addr_offset_pend_reads;
                 end else begin
                     op_pend_reads_all[(OP_SRC[i] >= VPORT_CNT) ? '0 : op_vaddr[i]] = 1'b1;
-                    if(OP_MASK[i] & ~state_q.first_iter) begin
-                        // in case we have a segmented instruction we need to clear
-                        // a pending read since the saved mask register is used instead
-                        // of accesing the register file
-                        op_pend_reads_all[(OP_SRC[i] >= VPORT_CNT) ? '0 : op_vaddr[i]] = 1'b0;
-                    end
                 end
             end
         end
@@ -993,7 +984,6 @@ module vproc_pipeline import vproc_pkg::*; #(
         .pipe_in_valid_i      ( unpack_valid                 ),
         .pipe_in_ready_o      ( unpack_ready                 ),
         .pipe_in_ctrl_i       ( unpack_ctrl                  ),
-        .pipe_in_first_iter_i ( state_q.first_iter           ),
         .pipe_in_alt_count_lsu_use_i( state_q.mode.lsu.alt_count_lsu_use    ),
         .pipe_in_alt_eew_i    ( state_q.mode.lsu.alt_eew              ),
         .pipe_in_eew_i        ( unpack_ctrl.eew              ),
