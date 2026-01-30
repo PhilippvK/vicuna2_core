@@ -549,8 +549,14 @@ module vproc_pipeline import vproc_pkg::*; #(
         // Changes to control flow to improve performance.  Introduces timing anomalies
         // Change how res_store is caculated to enable early stopping. Now depends on the current Vector Length
         `ifdef OLD_VICUNA
-        if ((count_next_inc.part.low == '0 | (state_q.last_cycle & state_q.mode.lsu.alt_count_lsu_use)) & ((OP_ALT_COUNTER == '0) | ~state_q.count.part.sign | ((OP_ALT_COUNTER != '0) & state_q.unit == UNIT_LSU)) &
-           ((RES_ALWAYS_VREG | state_q.res_vreg) != '0) // at least one valid vreg
+        if (
+                (count_next_inc.part.low == '0) 
+                & (
+                        (OP_ALT_COUNTER == '0) 
+                        | (~state_q.count.part.sign & state_q.unit != UNIT_LSU) 
+                        | (OP_ALT_COUNTER != '0 & state_q.unit == UNIT_LSU)
+                  ) 
+                & ((RES_ALWAYS_VREG | state_q.res_vreg) != '0) // at least one valid vreg
             ) begin
             res_store = ((RES_NARROW & state_q.res_narrow) == '0) | ~count_next_inc.part.mul[0];
         end
