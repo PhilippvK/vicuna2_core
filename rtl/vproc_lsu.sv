@@ -225,9 +225,9 @@ module vproc_lsu import vproc_pkg::*; #(
             LSU_INDEXED: begin
                 // note: the index is multiplied by the element byte width and the field count
                 unique case (pipe_in_ctrl_i.mode.lsu.alt_eew)
-                    VSEW_8:  req_addr_d = pipe_in_ctrl_i.xval +  32'(vs2_data[7 :0]);//32'(vs2_data[7 :0]) * (32'(1) + 32'(pipe_in_ctrl_i.mode.lsu.nfields));
-                    VSEW_16: req_addr_d = pipe_in_ctrl_i.xval + 32'(vs2_data[15:0]);//{31'(vs2_data[15:0]) * (31'(1) + 31'(pipe_in_ctrl_i.mode.lsu.nfields)), 1'b0};
-                    VSEW_32: req_addr_d = pipe_in_ctrl_i.xval + 32'(vs2_data[31:0]);//{    vs2_data[29:0]  * (30'(1) + 30'(pipe_in_ctrl_i.mode.lsu.nfields)), 2'b0};
+                    VSEW_8:  req_addr_d = pipe_in_ctrl_i.xval +  32'(vs2_data[7 :0]);
+                    VSEW_16: req_addr_d = pipe_in_ctrl_i.xval + 32'(vs2_data[15:0]);
+                    VSEW_32: req_addr_d = pipe_in_ctrl_i.xval + 32'(vs2_data[31:0]);
                     default: ;
                 endcase
             end
