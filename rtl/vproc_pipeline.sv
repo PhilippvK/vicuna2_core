@@ -204,7 +204,8 @@ module vproc_pipeline import vproc_pkg::*; #(
             state_d.pend_vreg_wr = vreg_pend_wr_i;
         end
     end
-    assign wait_alt_count_next = (state_wait_alt_count_q | state_q.last_cycle) & (OP_ALT_COUNTER != 0) & ~state_q.alt_last_cycle & ~state_q.mode.lsu.alt_count_lsu_use;
+    assign wait_alt_count_next = (state_wait_alt_count_q | state_q.last_cycle) & (OP_ALT_COUNTER != 0) & ~state_q.alt_last_cycle 
+                                    & (state_q.unit != UNIT_LSU);
 
     logic state_stall, unpack_ready;
     logic state_done;                // the current instruction is done, next can be accepted

@@ -342,7 +342,6 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
         state_init.mode           = pipe_in_data_i.mode;
         state_init.emul           = pipe_in_data_i.emul;
         state_init.eew            = unit_lsu ? pipe_in_data_i.mode.lsu.eew : pipe_in_data_i.vsew;
-        state_init.mode.lsu.alt_count_lsu_use = 0;
 
         state_init.count_extra_phase = unit_sld & (pipe_in_data_i.mode.sld.dir == SLD_DOWN);
         state_init.alt_count_init    = '0;
@@ -418,6 +417,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             state_init.count_inc = DONT_CARE_ZERO ? count_inc_e'('0) : count_inc_e'('x);
             state_init.mode.lsu.alt_eew  = pipe_in_data_i.mode.lsu.eew;
             state_init.mode.lsu.eew = pipe_in_data_i.mode.lsu.eew;
+            state_init.mode.lsu.alt_count_lsu_use = 0;
 
             unique case (pipe_in_data_i.mode.lsu.eew)
                 VSEW_8:  state_init.count_inc = COUNT_INC_1;
