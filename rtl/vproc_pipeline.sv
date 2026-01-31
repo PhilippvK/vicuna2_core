@@ -29,6 +29,8 @@ module vproc_pipeline import vproc_pkg::*; #(
         parameter bit [OP_CNT-1:0]      OP_ALWAYS_ELEMWISE  = '0,   // op is 1 elem
         parameter bit [OP_CNT-1:0]      OP_ALT_COUNTER      = '0,
         parameter bit [OP_CNT-1:0]      OP_ALWAYS_VREG      = '0,
+        parameter bit [OP_CNT-1:0]      OP_FIELD            = 0,    // op incremented for each field
+        parameter bit [OP_CNT-1:0]      OP_INDEX_FIELD      = 0, 
         parameter int unsigned          UNPACK_STAGES       = 0,
         parameter int unsigned          MAX_RES_W           = 64,
         parameter int unsigned          RES_CNT             = 1,
@@ -39,7 +41,6 @@ module vproc_pipeline import vproc_pkg::*; #(
         parameter bit [RES_CNT-1:0]     RES_ALWAYS_ELEMWISE = '0,   // result is 1 elem
         parameter bit [RES_CNT-1:0]     RES_ALWAYS_VREG     = '0,   // result is 1 elem
         parameter bit                   FIELD_COUNT_USED    = 1'b0,
-        parameter int unsigned          FIELD_OP            = 0,    // op incremented for each field
         parameter int unsigned           VLSU_QUEUE_SZ     = 4,
         parameter bit [VLSU_FLAGS_W-1:0] VLSU_FLAGS        = '0,
         parameter mul_type               MUL_TYPE          = MUL_GENERIC,
@@ -129,6 +130,7 @@ module vproc_pipeline import vproc_pkg::*; #(
         count_inc_e                      alt_count_inc;
         count_inc_e                      count_inc;      // counter increment policy
         logic        [AUX_COUNTER_W-1:0] aux_count;      // auxiliary counter (for dyn addr ops)
+        logic                      [2:0] field_count_init;    // field counter (for segment loads/stores)
         logic                      [2:0] field_count;    // field counter (for segment loads/stores)
         logic                            first_cycle;
         logic                            last_cycle;
@@ -244,6 +246,7 @@ module vproc_pipeline import vproc_pkg::*; #(
                     state_next.aux_count = '0;
                 end
             end
+            state_next.field_count_init        = pipe_in_state_i.field_count_init;
             state_next.field_count             = pipe_in_state_i.field_count_init;
             state_next.first_cycle             = 1'b1;
             state_next.init_addr               = 1'b1;
@@ -271,7 +274,7 @@ module vproc_pipeline import vproc_pkg::*; #(
             if (aux_count_used) begin
                 state_next.aux_count = state_q.aux_count + AUX_COUNTER_W'(1);
             end
-            if (FIELD_COUNT_USED & state_q.last_cycle & state_q.alt_last_cycle) begin
+            if (FIELD_COUNT_USED & state_q.last_cycle) begin
                 state_next.init_addr   = 1'b1;
                 state_next.count       = '0;
                 state_next.alt_count   = '0;
@@ -283,14 +286,19 @@ module vproc_pipeline import vproc_pkg::*; #(
                     VSEW_32: state_next.xval = state_q.xval + 32'h4;
                     default: ;
                 endcase
-                state_next.op_vaddr[FIELD_OP] = DONT_CARE_ZERO ? '0 : 'x;
-                unique case (state_q.emul)
-                    EMUL_1: state_next.op_vaddr[FIELD_OP] = state_q.op_vaddr[FIELD_OP] + 5'(1);
-                    EMUL_2: state_next.op_vaddr[FIELD_OP] = state_q.op_vaddr[FIELD_OP] + 5'(2);
-                    EMUL_4: state_next.op_vaddr[FIELD_OP] = state_q.op_vaddr[FIELD_OP] + 5'(4);
-                    // EMUL_8 is invalid since EMUL * NFIELDS <= 8 according to spec
-                    default: ;
-                endcase
+
+                for(int i = 0; i < OP_CNT; i++) begin
+                    if(OP_FIELD[i]) begin
+                        state_next.op_vaddr[i] = DONT_CARE_ZERO ? '0 : 'x;
+                        unique case (state_q.emul)
+                            EMUL_1: state_next.op_vaddr[i] = state_q.op_vaddr[i] + 5'(1);
+                            EMUL_2: state_next.op_vaddr[i] = state_q.op_vaddr[i] + 5'(2);
+                            EMUL_4: state_next.op_vaddr[i] = state_q.op_vaddr[i] + 5'(4);
+                            // EMUL_8 is invalid since EMUL * NFIELDS <= 8 according to spec
+                            default: ;
+                        endcase
+                    end
+                end
                 state_next.res_vaddr = DONT_CARE_ZERO ? '0 : 'x;
                 unique case (state_q.emul)
                     EMUL_1: state_next.res_vaddr = state_q.res_vaddr + 5'(1);
@@ -747,19 +755,44 @@ module vproc_pipeline import vproc_pkg::*; #(
     logic [31:0] op_fields_pend_reads;
     always_comb begin
         op_fields_pend_reads = '0;
-        if (OP_ALWAYS_VREG[FIELD_OP] | state_q.op_flags[FIELD_OP].vreg) begin
-            for (int i = 0; 3'(i) < state_q.field_count; i++) begin
-                unique case (state_q.emul)
-                    EMUL_1: op_fields_pend_reads |= (32'h1 <<  (i + 1)     ) <<  state_q.op_vaddr[FIELD_OP]            ;
-                    EMUL_2: op_fields_pend_reads |= (32'h3 << ((i + 1) * 2)) << {state_q.op_vaddr[FIELD_OP][4:1], 1'b0};
-                    EMUL_4: op_fields_pend_reads |= (32'hF << ((i + 1) * 4)) << {state_q.op_vaddr[FIELD_OP][4:2], 2'b0};
-                    // EMUL_8 cannot be used with multiple fields
-                    default: ;
-                endcase
+
+        for(int i = 0; i < OP_CNT; i++) begin
+            
+            if(OP_FIELD[i]) begin
+                if (OP_ALWAYS_VREG[i] | state_q.op_flags[i].vreg) begin
+                    for (int j = 0; 3'(j) < state_q.field_count; j++) begin
+                        unique case (state_q.emul)
+                            EMUL_1: op_fields_pend_reads |= (32'h1 <<  (j + 1)     ) <<  state_q.op_vaddr[i]            ;
+                            EMUL_2: op_fields_pend_reads |= (32'h3 << ((j + 1) * 2)) << {state_q.op_vaddr[i][4:1], 1'b0};
+                            EMUL_4: op_fields_pend_reads |= (32'hF << ((j + 1) * 4)) << {state_q.op_vaddr[i][4:2], 2'b0};
+                            // EMUL_8 cannot be used with multiple fields
+                            default: ;
+                        endcase
+                    end
+                end
             end
+
+            if(OP_INDEX_FIELD[i]) begin
+                // Extend index register pending for segmented instructions
+                if (OP_ALWAYS_VREG[i] | state_q.op_flags[i].vreg) begin
+                    if (state_q.unit == UNIT_LSU & state_q.mode.lsu.alt_count_lsu_use & state_q.field_count > 0) begin
+                        unique case (state_q.mode.lsu.alt_emul)
+                            EMUL_1: op_fields_pend_reads |= (32'h1) <<  state_q.op_vaddr[i]            ;
+                            EMUL_2: op_fields_pend_reads |= (32'h3) << {state_q.op_vaddr[i][4:1], 1'b0};
+                            EMUL_4: op_fields_pend_reads |= (32'hF) << {state_q.op_vaddr[i][4:2], 2'b0};
+                            EMUL_8: op_fields_pend_reads |= (32'hFF) << {state_q.op_vaddr[i][4:3], 3'b0};
+                            default: ;
+                        endcase
+                    end
+                end
+            end
+
+            if(OP_MASK[i]) begin
+                // Extend mask register pending for segmented instructions
+                op_fields_pend_reads |=  (state_q.field_count > 0 & state_q.mode.lsu.masked) ? (32'h1) << state_q.op_vaddr[i] : '0;
+            end
+
         end
-  
-        //op_fields_pend_reads |=  (state_q.field_count > 0 & state_q.mode.lsu.masked) ? 32'h1 : 32'h0;
     end
 
     logic [31:0] op_pend_reads_all;

@@ -235,6 +235,21 @@ module vproc_decoder #(
                                 if ( instr_i[6:0] == 7'h27) begin
                                    instr_illegal = 1'b1;// illegal for stores
                                 end
+
+                                if (instr_i[31:29] != '0) begin
+                                    // Unit-strided segment stores result in strided stores
+                                    mode_o.lsu.stride = LSU_STRIDED;
+
+                                    // set the byte stride (which is usually held in rs2) depending
+                                    // on the element width and the number of fields as follows:
+                                    //     stride = (EEW/8) * nf = (EEW/8) * (instr_i[31:29] + 1)
+                                    unique case (instr_i[14:12]) // width field
+                                        3'b000: rs2_o.r.xval = {28'b0, {1'b0, instr_i[31:29]} + 4'h1       }; // EEW 8
+                                        3'b101: rs2_o.r.xval = {27'b0, {1'b0, instr_i[31:29]} + 4'h1, 1'b0 }; // EEW 16
+                                        3'b110: rs2_o.r.xval = {26'b0, {1'b0, instr_i[31:29]} + 4'h1, 2'b00}; // EEW 32
+                                        default: ;
+                                    endcase
+                                end
                             end
                             5'b01000: begin // whole register load/store
                                 emul_override = 1'b1; //TODO: PROBABLY NEEDS SAME TREATMENT AS VMV4R -CHANGE NOT VERIFIED
