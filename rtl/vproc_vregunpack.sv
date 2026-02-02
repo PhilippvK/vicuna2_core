@@ -50,7 +50,7 @@ module vproc_vregunpack
         input  logic                                  pipe_in_valid_i,
         output logic                                  pipe_in_ready_o,
         input  logic               [CTRL_DATA_W-1:0]  pipe_in_ctrl_i,       // pipeline control sigs
-        input  logic                                  pipe_in_unit_i,
+        input  op_unit                                pipe_in_unit_i,
         input  vproc_pkg::cfg_vsew                    pipe_in_alt_eew_i,
         input  vproc_pkg::cfg_vsew                    pipe_in_eew_i,        // current element width
         input  logic   [OP_CNT-1:0]                   pipe_in_op_load_i,    // load signals of ops
@@ -100,7 +100,7 @@ module vproc_vregunpack
 
     typedef struct packed {
         logic               [CTRL_DATA_W-1:0] ctrl;
-        logic                                 unit;
+        op_unit                               unit;
         cfg_vsew                              eew;
         cfg_vsew                              alt_eew;
         logic   [OP_CNT-1:0]                  op_load;
@@ -116,7 +116,7 @@ module vproc_vregunpack
         stage_0          = vregunpack_state_t'(DONT_CARE_ZERO ? '0 : 'x);
         `ifdef OLD_VICUNA
         stage_0.ctrl     = pipe_in_ctrl_i;
-        stage_0.unit = pipe_in_unit_i;
+        stage_0.unit     = pipe_in_unit_i;
         stage_0.alt_eew  = pipe_in_alt_eew_i;
         stage_0.eew      = pipe_in_eew_i;
         stage_0.op_load  = pipe_in_op_load_i;
@@ -126,7 +126,7 @@ module vproc_vregunpack
         `else
         if (pipe_in_ready_o & pipe_in_valid_i) begin
             stage_0.ctrl     = pipe_in_ctrl_i;
-            stage_0.unit = pipe_in_unit_i;
+            stage_0.unit     = pipe_in_unit_i;
             stage_0.alt_eew  = pipe_in_alt_eew_i;
             stage_0.eew      = pipe_in_eew_i;
             stage_0.op_load  = pipe_in_op_load_i;

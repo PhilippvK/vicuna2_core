@@ -30,7 +30,7 @@ module vproc_pipeline import vproc_pkg::*; #(
         parameter bit [OP_CNT-1:0]      OP_ALT_COUNTER      = '0,
         parameter bit [OP_CNT-1:0]      OP_ALWAYS_VREG      = '0,
         parameter bit [OP_CNT-1:0]      OP_FIELD            = 0,    // op incremented for each field
-        parameter bit [OP_CNT-1:0]      OP_INDEX_FIELD      = 0, 
+        parameter bit [OP_CNT-1:0]      OP_INDEX_FIELD      = 0,
         parameter int unsigned          UNPACK_STAGES       = 0,
         parameter int unsigned          MAX_RES_W           = 64,
         parameter int unsigned          RES_CNT             = 1,
@@ -90,7 +90,7 @@ module vproc_pipeline import vproc_pkg::*; #(
 
         `ifdef RISCV_ZVE32F
         output logic                    freg_res,
-        `endif 
+        `endif
 
         output logic                    xreg_valid_o,
         input  logic                    xreg_ready_i,
@@ -206,7 +206,7 @@ module vproc_pipeline import vproc_pkg::*; #(
             state_d.pend_vreg_wr = vreg_pend_wr_i;
         end
     end
-    assign wait_alt_count_next = (state_wait_alt_count_q | state_q.last_cycle) & (OP_ALT_COUNTER != 0) & ~state_q.alt_last_cycle 
+    assign wait_alt_count_next = (state_wait_alt_count_q | state_q.last_cycle) & (OP_ALT_COUNTER != 0) & ~state_q.alt_last_cycle
                                     & (state_q.unit != UNIT_LSU);
 
     logic state_stall, unpack_ready;
@@ -252,9 +252,18 @@ module vproc_pipeline import vproc_pkg::*; #(
             state_next.init_addr               = 1'b1;
             state_next.requires_flush          = pipe_in_state_i.requires_flush;
             state_next.id                      = pipe_in_state_i.id;
-            state_next.unit                    = pipe_in_state_i.unit;
             state_next.mode                    = pipe_in_state_i.mode;
-            state_next.eew                     = pipe_in_state_i.eew;
+
+            // TODO: this block is needed for the unpack unit since
+            // it seems that signals do not stay valid long enough
+            if (pipe_in_valid_i) begin
+                state_next.eew = pipe_in_state_i.eew;
+                state_next.unit  = pipe_in_state_i.unit;
+            end else begin
+                state_next.eew = state_q.eew;
+                state_next.unit = state_q.unit;
+            end
+
             state_next.emul                    = pipe_in_state_i.emul;
             state_next.vxrm                    = pipe_in_state_i.vxrm;
             state_next.vl                      = pipe_in_state_i.vl;
@@ -430,16 +439,16 @@ module vproc_pipeline import vproc_pkg::*; #(
 
             //VL/(MAX_OP_W/8) is number of operations needed to finish the current VL
             // * (MAX_OP_W/COUNTER_OP_W) is number of increments of the counter for a full OP W.  all bits of VL below MAX_OP_W are cleared with this shifting order
-            last_cycle_next     =     count_next_inc >= (state_q.vl >> $clog2(MAX_OP_W/8)) << $clog2(MAX_OP_W/COUNTER_OP_W); 
+            last_cycle_next     =     count_next_inc >= (state_q.vl >> $clog2(MAX_OP_W/8)) << $clog2(MAX_OP_W/COUNTER_OP_W);
             alt_last_cycle_next =     alt_count_next_inc >= (state_q.vl >> $clog2(MAX_OP_W/8)) << $clog2(MAX_OP_W/COUNTER_OP_W);
 
             //clear last cycle in case processing final elements for elemwise operation
             if (state_q.op_flags[0].elemwise) begin //TODO: why doesnt this formula work above, only for elemwise)
-                last_cycle_next     =     count_next_inc >= (state_q.vl  >> ($clog2(MAX_OP_W/8) - $clog2(MAX_OP_W/COUNTER_OP_W))) -1; 
+                last_cycle_next     =     count_next_inc >= (state_q.vl  >> ($clog2(MAX_OP_W/8) - $clog2(MAX_OP_W/COUNTER_OP_W))) -1;
                 alt_last_cycle_next =     alt_count_next_inc >= (state_q.vl >> ($clog2(MAX_OP_W/8) - $clog2(MAX_OP_W/COUNTER_OP_W))) -1;
 
             end
-   
+
             `endif
             if ((OP_ALT_COUNTER != '0) & state_q.count.part.sign & state_q.unit != UNIT_LSU) begin
                 last_cycle_next = '0;
@@ -554,17 +563,17 @@ module vproc_pipeline import vproc_pkg::*; #(
         // Store uses next counter value (after increment, but not taking into account a potential
         // new instruction) and current state (i.e., also disregarding new instructions)
         // TODO consider the auxiliary counter
-        
+
         // Changes to control flow to improve performance.  Introduces timing anomalies
         // Change how res_store is caculated to enable early stopping. Now depends on the current Vector Length
         `ifdef OLD_VICUNA
         if (
-                (count_next_inc.part.low == '0) 
+                (count_next_inc.part.low == '0)
                 & (
-                        (OP_ALT_COUNTER == '0) 
-                        | (~state_q.count.part.sign & state_q.unit != UNIT_LSU) 
+                        (OP_ALT_COUNTER == '0)
+                        | (~state_q.count.part.sign & state_q.unit != UNIT_LSU)
                         | (OP_ALT_COUNTER != '0 & state_q.unit == UNIT_LSU)
-                  ) 
+                  )
                 & ((RES_ALWAYS_VREG | state_q.res_vreg) != '0) // at least one valid vreg
             ) begin
             res_store = ((RES_NARROW & state_q.res_narrow) == '0) | ~count_next_inc.part.mul[0];
@@ -685,9 +694,9 @@ module vproc_pipeline import vproc_pkg::*; #(
                     end
                 end
                 else if (OP_MASK[i]) begin
-                    if ((OP_ALT_COUNTER != '0) 
-                      & (OP_ALT_COUNTER[i] ? state_q.alt_count.part.sign : state_q.count.part.sign) 
-                      & (OP_ALWAYS_VREG[i] | state_q.op_flags[i].vreg) 
+                    if ((OP_ALT_COUNTER != '0)
+                      & (OP_ALT_COUNTER[i] ? state_q.alt_count.part.sign : state_q.count.part.sign)
+                      & (OP_ALWAYS_VREG[i] | state_q.op_flags[i].vreg)
                       & state_q.unit != UNIT_LSU) begin
                         op_pend_reads[i] = (OP_SRC[i] >= VPORT_CNT) ? '0 : (32'b1 << state_q.op_vaddr[i]);
                     end
@@ -757,7 +766,7 @@ module vproc_pipeline import vproc_pkg::*; #(
         op_fields_pend_reads = '0;
 
         for(int i = 0; i < OP_CNT; i++) begin
-            
+
             if(OP_FIELD[i]) begin
                 if (OP_ALWAYS_VREG[i] | state_q.op_flags[i].vreg) begin
                     for (int j = 0; 3'(j) < state_q.field_count; j++) begin
@@ -1110,7 +1119,7 @@ module vproc_pipeline import vproc_pkg::*; #(
         .trans_complete_exccode_o  ( trans_complete_exccode_o ),
         `ifdef RISCV_ZVE32F
         .freg_res                  ( freg_res                 ),
-        `endif 
+        `endif
         .xreg_valid_o              ( xreg_valid_o             ),
         .xreg_ready_i              ( xreg_ready_i             ),
         .xreg_id_o                 ( xreg_id_o                ),
