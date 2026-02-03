@@ -69,6 +69,28 @@ module vproc_pending_wr #(
                     {EMUL_8, 3'b000}: pend_vd = 32'hFF << {rd_i.addr[4:3], 3'b000};
                     default: ;
                 endcase
+
+                if(mode_i.lsu.stride == LSU_INDEXED) begin
+                    // for index stride the lmul for data is stored in alt
+                    unique case ({mode_i.lsu.alt_emul, mode_i.lsu.nfields})
+                        {EMUL_1, 3'b000}: pend_vd = 32'h01 <<  rd_i.addr              ;
+                        {EMUL_1, 3'b001}: pend_vd = 32'h03 <<  rd_i.addr              ;
+                        {EMUL_1, 3'b010}: pend_vd = 32'h07 <<  rd_i.addr              ;
+                        {EMUL_1, 3'b011}: pend_vd = 32'h0F <<  rd_i.addr              ;
+                        {EMUL_1, 3'b100}: pend_vd = 32'h1F <<  rd_i.addr              ;
+                        {EMUL_1, 3'b101}: pend_vd = 32'h3F <<  rd_i.addr              ;
+                        {EMUL_1, 3'b110}: pend_vd = 32'h7F <<  rd_i.addr              ;
+                        {EMUL_1, 3'b111}: pend_vd = 32'hFF <<  rd_i.addr              ;
+                        {EMUL_2, 3'b000}: pend_vd = 32'h03 << {rd_i.addr[4:1], 1'b0  };
+                        {EMUL_2, 3'b001}: pend_vd = 32'h0F << {rd_i.addr[4:1], 1'b0  };
+                        {EMUL_2, 3'b010}: pend_vd = 32'h3F << {rd_i.addr[4:1], 1'b0  };
+                        {EMUL_2, 3'b011}: pend_vd = 32'hFF << {rd_i.addr[4:1], 1'b0  };
+                        {EMUL_4, 3'b000}: pend_vd = 32'h0F << {rd_i.addr[4:2], 2'b00 };
+                        {EMUL_4, 3'b001}: pend_vd = 32'hFF << {rd_i.addr[4:2], 2'b00 };
+                        {EMUL_8, 3'b000}: pend_vd = 32'hFF << {rd_i.addr[4:3], 3'b000};
+                        default: ;
+                    endcase
+                end
             end else begin
                 unique case ({emul_i, widenarrow_i == OP_NARROWING})
                     {EMUL_1, 1'b0},

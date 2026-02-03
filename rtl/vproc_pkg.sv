@@ -115,22 +115,25 @@ typedef enum logic [2:0] {
 parameter int unsigned UNIT_CNT = 7;
 
 typedef enum logic [1:0] {
-    COUNT_INC_1,
-    COUNT_INC_2,
-    COUNT_INC_4,
-    COUNT_INC_MAX
+    COUNT_INC_1 = 2'b00,
+    COUNT_INC_2 = 2'b01,
+    COUNT_INC_4 = 2'b10,
+    COUNT_INC_MAX = 2'b11
 } count_inc_e;
 
 typedef enum logic [1:0] {
-    LSU_UNITSTRIDE,
-    LSU_STRIDED,
-    LSU_INDEXED
+    LSU_UNITSTRIDE = 2'b00,
+    LSU_STRIDED = 2'b01,
+    LSU_INDEXED = 2'b10
 } lsu_stride;
 
 typedef struct packed {
     logic       masked;
     logic       store;
     lsu_stride  stride;
+    logic       alt_count_lsu_use;
+    cfg_emul    alt_emul;
+    cfg_vsew    alt_eew;
     cfg_vsew    eew;
     logic [2:0] nfields;
 `ifdef VPROC_OP_MODE_UNION
@@ -192,6 +195,9 @@ typedef struct packed {
     logic           inv_op2;    // invert operand 2
     logic           sat_res;    // saturate result for narrowing operations
     logic           sigext;
+`ifdef VPROC_OP_MODE_UNION
+    logic [4:0] unused;
+`endif
 } op_mode_alu;
 
 typedef enum logic [1:0] {
@@ -209,7 +215,7 @@ typedef struct packed {
     logic       op2_signed;
     logic       op2_is_vd;
 `ifdef VPROC_OP_MODE_UNION
-    logic [5:0] unused;
+    logic [10:0] unused;
 `endif
 } op_mode_mul;
 
@@ -226,7 +232,7 @@ typedef struct packed {
     logic       masked;
     div_opcode_e    op;
 `ifdef VPROC_OP_MODE_UNION
-    logic [9:0] unused;
+    logic [14:0] unused;
 `endif
 } op_mode_div;
 
@@ -260,6 +266,7 @@ typedef struct packed {
     logic       src_1_narrow;
     logic       src_2_narrow;
 `ifdef VPROC_OP_MODE_UNION
+    logic [4:0] unused;
 `endif
 } op_mode_fpu;
 
@@ -273,7 +280,7 @@ typedef struct packed {
     opcode_sld_dir dir;    // slide direction
     logic          slide1; // slide 1 element
 `ifdef VPROC_OP_MODE_UNION
-    logic [9:0] unused;
+    logic [14:0] unused;
 `endif
 } op_mode_sld;
 
@@ -306,9 +313,9 @@ typedef struct packed {
     `endif
 `ifdef VPROC_OP_MODE_UNION
     `ifdef RISCV_ZVE32F
-        logic [4:0] unused;
+        logic [9:0] unused;
     `else 
-        logic [5:0] unused;
+        logic [10:0] unused;
     `endif
 `endif
 } op_mode_elem;
@@ -342,11 +349,14 @@ typedef struct packed {
     logic [1:0] agnostic;
     logic       vlmax;
     logic       keep_vl;
+`ifdef VPROC_OP_MODE_UNION
+    logic [4:0] unused;
+`endif
 } op_mode_cfg;
 
 `ifdef VPROC_OP_MODE_UNION
 typedef union packed {
-    logic [12:0]  unused;
+    logic [17:0]  unused;
 `else
 typedef struct packed {
 `endif

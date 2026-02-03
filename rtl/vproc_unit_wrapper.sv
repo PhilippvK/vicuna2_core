@@ -512,7 +512,6 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
             assign pipe_out_pend_clear_o                = unit_out_ctrl.res_store;
             assign pipe_out_pend_clear_cnt_o            = '0;
             assign pipe_out_instr_done_o                = unit_out_ctrl.last_cycle;
-            assign pipe_out_res_flags_o[0].shift        = unit_out_ctrl.res_shift;
         end 
         else if (UNIT == UNIT_FPU) begin
             CTRL_T                 unit_out_ctrl;

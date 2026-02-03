@@ -181,6 +181,8 @@ $(VPROC_CONFIG_PKG):
 	echo ""                                                                                 >>$@; \
 	echo "    parameter vreg_type    VREG_TYPE                   = VREG_GENERIC;"           >>$@; \
 	echo "    parameter int unsigned VREG_W                      = $(VREG_W);"              >>$@; \
+	echo "    parameter int unsigned VMEM_W                      = $(VMEM_W);"              >>$@; \
+	echo "    parameter int unsigned MEM_W                       = $(VMEM_W);"              >>$@; \
 	echo "    parameter int unsigned VPORT_RD_CNT                = $$vport_rd_cnt;"         >>$@; \
 	echo "    parameter int unsigned VPORT_RD_W   [VPORT_RD_CNT] = '{default: VREG_W};"     >>$@; \
 	echo "    parameter int unsigned VPORT_WR_CNT                = $$vport_wr_cnt;"         >>$@; \

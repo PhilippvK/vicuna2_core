@@ -335,6 +335,8 @@ module vproc_core import vproc_pkg::*; #(
     assign instr_valid_o = instr_valid;
     assign issue_id_used_o = issue_id_used;
 
+    logic dec_vl_override;
+
     op_unit instr_unit;
     assign instr_unit_o = instr_unit;
     op_mode instr_mode;
@@ -369,10 +371,11 @@ module vproc_core import vproc_pkg::*; #(
         .widenarrow_o       ( dec_data_d.widenarrow               ),
         .rs1_o              ( dec_data_d.rs1                      ),
         .rs2_o              ( dec_data_d.rs2                      ),
-        .rd_o               ( dec_data_d.rd                       )
+        .rd_o               ( dec_data_d.rd                       ),
+        .vl_override_o      ( dec_vl_override                     )
     );
     assign dec_data_d.id         = xif_issue_if.issue_req.id;
-    assign dec_data_d.vl_0       = vl_0_q;
+    assign dec_data_d.vl_0       = vl_0_q & ~dec_vl_override;
     assign dec_data_d.unit       = instr_unit;
     assign dec_data_d.mode       = instr_mode;
     assign dec_data_d.pend_load  = (instr_unit == UNIT_LSU) & ~instr_mode.lsu.store;
@@ -470,32 +473,36 @@ module vproc_core import vproc_pkg::*; #(
             // empty result or not. This must be done for accepted as well as
             // rejected instructions, since the main core will commit all of
             // them and rejected instructions must not produce a result.
-            instr_state_d    [xif_issue_if.issue_req.id] = INSTR_SPECULATIVE;
+            `ifdef COMMIT_AND_ISSUE
+                //CVA6 sends commit and issue together
+                instr_state_d    [xif_issue_if.issue_req.id] = INSTR_COMMITTED;
+            `else
+                instr_state_d    [xif_issue_if.issue_req.id] = INSTR_SPECULATIVE;
+            `endif
             instr_empty_res_d[xif_issue_if.issue_req.id] = ~xif_issue_if.issue_resp.writeback & ~xif_issue_if.issue_resp.loadstore;
         end
-        // else begin
-        //     if (~dec_valid & instr_valid) begin
-        //         dec_clear                    = 1'b1;
-        //         instr_state_d[dec_data_q.id] = INSTR_INVALID;
-        //         // instr_state_d[dec_data_d.id] = INSTR_INVALID;
-        //     end
-        // end
+
+        // Generate an empty result for all instructions except those that
+        // writeback to the main core and for vector loads and stores
+        `ifdef COMMIT_AND_ISSUE
+        if (xif_commit_if.commit_valid) begin
+            result_empty_valid = instr_empty_res_q[xif_commit_if.commit.id] || instr_empty_res_d[xif_commit_if.commit.id]; //allow for commit in same cycle as issue
+        end
+        //clear instr_empty_res_d on successful result signalling
+        if (xif_result_if.result_valid && xif_result_if.result_ready) begin
+            instr_empty_res_d[xif_result_if.result.id] = 1'b0;
+        end
+        `else
+        if (xif_commit_if.commit_valid & (instr_state_q[xif_commit_if.commit.id] != INSTR_INVALID)) begin
+            result_empty_valid = instr_empty_res_q[xif_commit_if.commit.id];
+        end
+        `endif
         // Only instructions that have already been offloaded or are being offloaded right now
-        // can be committed.  Commit transactions for invalid IDs are ignored.
+        // can be committed.  Commit transactions for invalid IDs are ignored. //CV32A6 can commit an instruction while offloading
         if (xif_commit_if.commit_valid & (
             (instr_offload & (xif_issue_if.issue_req.id == xif_commit_if.commit.id)) |
             (instr_state_q[xif_commit_if.commit.id] != INSTR_INVALID)
         )) begin
-            // Generate an empty result for all instructions except those that
-            // writeback to the main core and for vector loads and stores
-            if (~xif_commit_if.commit.commit_kill) begin
-                if (dec_valid & (xif_issue_if.issue_req.id == xif_commit_if.commit.id)) begin
-                    result_empty_valid = ~xif_issue_if.issue_resp.writeback & ~xif_issue_if.issue_resp.loadstore;
-                end else begin
-                    result_empty_valid = instr_empty_res_q[xif_commit_if.commit.id];
-                end
-            end
-
             if (dec_buf_valid_q & (dec_data_q.unit == UNIT_CFG) & (dec_data_q.id == xif_commit_if.commit.id)) begin
                 // Configuration instructions are not enqueued.  The instruction
                 // is retired and the result returned as soon as it is
@@ -1199,7 +1206,10 @@ module vproc_core import vproc_pkg::*; #(
         .result_csr_delayed_i      ( result_csr_delayed         ),
         .result_csr_data_i         ( result_csr_data            ),
         .result_csr_data_delayed_i ( csr_vl_o                   ),
-        .xif_result_if             ( xif_result_if              )
+        .xif_issue_if              ( xif_issue_if               ),
+        .xif_result_if             ( xif_result_if              ),
+        .xif_commit_if             ( xif_commit_if              )
+
     );
 
     assign xif_commit_if_commit_id_o = xif_commit_if.commit.id;

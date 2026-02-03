@@ -73,4 +73,21 @@ The CMakeLists file provides three outputs to be used by the project including V
 - **VICUNA_INCS** - list of all directories containing source files for Vicuna and CV-FPU needed by Verilator
 - **VICUNA_FLAGS** - list of all pre-processor flags needed to configure Vicuna correctly.  These should be included when running Verilator.
 
+## Publication
+
+If you use Vicuna2.0 in academic work, please cite
+[our publication]([https://doi.org/10.4230/LIPIcs.ECRTS.2021.1](https://doi.org/10.1109/Austrochip67945.2025.11183718)):
+
+```
+@inproceedings{inproceedings,
+author = {Jones, Jefferson and Kempen, Philipp and Mueller-Gritschneder, Daniel},
+year = {2025},
+month = {09},
+pages = {69-72},
+title = {Vicuna2.0: RISC-V Embedded Vector Unit with Half-Precision Floating-Point Support for TinyML},
+doi = {10.1109/Austrochip67945.2025.11183718}
+}
+```
+
+
 

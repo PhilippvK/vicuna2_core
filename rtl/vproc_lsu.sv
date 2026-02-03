@@ -224,10 +224,10 @@ module vproc_lsu import vproc_pkg::*; #(
             ) : req_addr_q;
             LSU_INDEXED: begin
                 // note: the index is multiplied by the element byte width and the field count
-                unique case (pipe_in_ctrl_i.mode.lsu.eew)
-                    VSEW_8:  req_addr_d = pipe_in_ctrl_i.xval +  32'(vs2_data[7 :0]) * (32'(1) + 32'(pipe_in_ctrl_i.mode.lsu.nfields));
-                    VSEW_16: req_addr_d = pipe_in_ctrl_i.xval + {31'(vs2_data[15:0]) * (31'(1) + 31'(pipe_in_ctrl_i.mode.lsu.nfields)), 1'b0};
-                    VSEW_32: req_addr_d = pipe_in_ctrl_i.xval + {    vs2_data[29:0]  * (30'(1) + 30'(pipe_in_ctrl_i.mode.lsu.nfields)), 2'b0};
+                unique case (pipe_in_ctrl_i.mode.lsu.alt_eew)
+                    VSEW_8:  req_addr_d = pipe_in_ctrl_i.xval +  32'(vs2_data[7 :0]);
+                    VSEW_16: req_addr_d = pipe_in_ctrl_i.xval + 32'(vs2_data[15:0]);
+                    VSEW_32: req_addr_d = pipe_in_ctrl_i.xval + 32'(vs2_data[31:0]);
                     default: ;
                 endcase
             end
@@ -353,8 +353,8 @@ module vproc_lsu import vproc_pkg::*; #(
     // XIF mem_result_valid is asserted and the memory result's instruction ID matches and transaction is not suppressed(MIGHT BE AN ISSUE TODO)
     logic xif_mem_result_id_valid;
     assign xif_mem_result_id_valid = xif_memres_if.mem_result_valid &
-                                    (xif_memres_if.mem_result.id == deq_state.id) & !deq_state.suppressed;
-
+                                    //(xif_memres_if.mem_result.id == deq_state.id) & !deq_state.suppressed; //XIF mem_result_id has been deprecated.  Remove check for this
+                                    !deq_state.suppressed;
 
     assign deq_ready           = xif_mem_result_id_valid | deq_state.suppressed | mem_err_d;
     assign state_rdata_valid_d = deq_valid & deq_ready;

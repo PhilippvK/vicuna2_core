@@ -177,7 +177,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
     localparam bit OP0_ELEMWISE           = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM] | UNITS[UNIT_FPU];
     localparam bit OP1_ELEMWISE           = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM] | UNITS[UNIT_FPU];
     localparam bit OPMASK_ELEMWISE        = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM] | UNITS[UNIT_FPU];
-    localparam bit OP0_ALT_COUNTER        = UNITS[UNIT_SLD];
+    localparam bit OP0_ALT_COUNTER        = UNITS[UNIT_SLD] | UNITS[UNIT_LSU];
 
     // result count and default width
     localparam int unsigned RES_CNT       = UNITS[UNIT_ALU] ? 2 : 1;
@@ -190,7 +190,6 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
 
     // miscellaneous pipeline config
     localparam bit FIELD_COUNT_USED       = UNITS[UNIT_LSU];
-    localparam int unsigned FIELD_OP      = UNITS[UNIT_LSU] ? 1 : 0;
 
 
     ///////////////////////////////////////////////////////////////////////////
@@ -201,6 +200,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
     typedef struct packed {
         logic                            count_extra_phase; // start by counting an extra phase
         logic        [ALT_COUNT_W  -1:0] alt_count_init;    // alternative counter initial value
+        count_inc_e                      alt_count_inc;
         count_inc_e                      count_inc;         // counter increment policy
         logic                      [2:0] field_count_init;  // field counter initial value
         logic                            requires_flush;    // whether the instr requires flushing
@@ -338,6 +338,10 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
     always_comb begin
         state_init = state_t'('0);
 
+        state_init.mode           = pipe_in_data_i.mode;
+        state_init.emul           = pipe_in_data_i.emul;
+        state_init.eew            = unit_lsu ? pipe_in_data_i.mode.lsu.eew : pipe_in_data_i.vsew;
+
         state_init.count_extra_phase = unit_sld & (pipe_in_data_i.mode.sld.dir == SLD_DOWN);
         state_init.alt_count_init    = '0;
         if (unit_sld) begin
@@ -387,18 +391,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
         end
 
         state_init.count_inc = COUNT_INC_MAX;
-        if (unit_lsu) begin 
-            state_init.count_inc = DONT_CARE_ZERO ? count_inc_e'('0) : count_inc_e'('x);
-            unique case (pipe_in_data_i.mode.lsu.eew)
-                VSEW_8:  state_init.count_inc = COUNT_INC_1;
-                VSEW_16: state_init.count_inc = COUNT_INC_2;
-                VSEW_32: state_init.count_inc = COUNT_INC_4;
-                default: ;
-            endcase
-            if (pipe_in_data_i.mode.lsu.stride == LSU_UNITSTRIDE) begin
-                state_init.count_inc = COUNT_INC_MAX;
-            end
-        end
+        
         if (unit_elem) begin
             state_init.count_inc = DONT_CARE_ZERO ? count_inc_e'('0) : count_inc_e'('x);
             unique case (pipe_in_data_i.vsew)
@@ -419,17 +412,63 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             endcase
         end
 
+        if (unit_lsu) begin 
+            state_init.count_inc = DONT_CARE_ZERO ? count_inc_e'('0) : count_inc_e'('x);
+            state_init.mode.lsu.alt_eew  = pipe_in_data_i.mode.lsu.eew;
+            state_init.mode.lsu.eew = pipe_in_data_i.mode.lsu.eew;
+            state_init.mode.lsu.alt_count_lsu_use = 0;
+
+            unique case (pipe_in_data_i.mode.lsu.eew)
+                VSEW_8:  state_init.count_inc = COUNT_INC_1;
+                VSEW_16: state_init.count_inc = COUNT_INC_2;
+                VSEW_32: state_init.count_inc = COUNT_INC_4;
+                default: ;
+            endcase
+
+            if (pipe_in_data_i.mode.lsu.stride == LSU_UNITSTRIDE) begin
+                state_init.count_inc = COUNT_INC_MAX;
+            end else if (pipe_in_data_i.mode.lsu.stride == LSU_INDEXED) begin
+
+                state_init.mode.lsu.alt_count_lsu_use = 1;
+                
+                // swap values since calculated eew and emul are for indexed register
+                // and the default values stored in alt are for data register
+                state_init.mode.lsu.alt_eew  = pipe_in_data_i.mode.lsu.eew;
+                state_init.mode.lsu.eew = pipe_in_data_i.mode.lsu.alt_eew;
+                state_init.eew = pipe_in_data_i.mode.lsu.alt_eew;
+
+                unique case (pipe_in_data_i.mode.lsu.alt_eew)
+                    VSEW_8:  state_init.count_inc = COUNT_INC_1;
+                    VSEW_16: state_init.count_inc = COUNT_INC_2;
+                    VSEW_32: state_init.count_inc = COUNT_INC_4;
+                    default: ;
+                endcase
+
+                unique case (pipe_in_data_i.mode.lsu.eew)
+                    VSEW_8:  state_init.alt_count_inc = COUNT_INC_1;
+                    VSEW_16: state_init.alt_count_inc = COUNT_INC_2;
+                    VSEW_32: state_init.alt_count_inc = COUNT_INC_4;
+                    default: ;
+                endcase
+
+                state_init.mode.lsu.alt_emul = pipe_in_data_i.emul;
+                state_init.emul = pipe_in_data_i.mode.lsu.alt_emul;
+            end
+        end
+
+        if(~(unit_lsu & pipe_in_data_i.mode.lsu.stride == LSU_INDEXED)) begin
+            state_init.alt_count_inc = state_init.count_inc;
+        end
+
         state_init.field_count_init = unit_lsu ? pipe_in_data_i.mode.lsu.nfields : '0;
         state_init.requires_flush = (unit_elem & elem_flush) | (unit_fpu & pipe_in_data_i.mode.fpu.op_reduction);
         state_init.id             = pipe_in_data_i.id;
         state_init.unit           = pipe_in_data_i.unit;
-        state_init.mode           = pipe_in_data_i.mode;
-        state_init.emul           = pipe_in_data_i.emul;
-        state_init.eew            = unit_lsu ? pipe_in_data_i.mode.lsu.eew : pipe_in_data_i.vsew;
         state_init.vxrm           = pipe_in_data_i.vxrm;
         state_init.vl             = pipe_in_data_i.vl;
         state_init.vl_0           = pipe_in_data_i.vl_0;
         state_init.xval           = pipe_in_data_i.rs1.r.xval;
+
         if (unit_sld & ~pipe_in_data_i.mode.sld.slide1) begin
             // convert element offset to byte offset for the relevant section of rs1 and negate
             // for down slides
@@ -551,6 +590,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             localparam bit [0:0]    RES_NARROW          = RES0_NARROW;
             localparam bit [0:0]    RES_ALLOW_ELEMWISE  = RES0_ALLOW_ELEMWISE;
 
+            localparam bit [1:0]    OP_FIELD            = FIELD_COUNT_USED ? 2'b10 : '0;
+            localparam bit [1:0]    OP_INDEX_FIELD      = FIELD_COUNT_USED ? 2'b01 : '0;
+
             vproc_pipeline #(
                 .VREG_W              ( VREG_W              ),
                 .CFG_VL_W            ( CFG_VL_W            ),
@@ -587,7 +629,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 .RES_ALWAYS_ELEMWISE ( '0                  ),
                 .RES_ALWAYS_VREG     ( RES_ALWAYS_VREG     ),
                 .FIELD_COUNT_USED    ( FIELD_COUNT_USED    ),
-                .FIELD_OP            ( FIELD_OP            ),
+                .OP_FIELD            ( OP_FIELD            ),
+                .OP_INDEX_FIELD      ( OP_INDEX_FIELD      ),
                 .VLSU_QUEUE_SZ       ( VLSU_QUEUE_SZ       ),
                 .VLSU_FLAGS          ( VLSU_FLAGS          ),
                 .MUL_TYPE            ( MUL_TYPE            ),
@@ -616,6 +659,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             localparam bit [0:0]    RES_NARROW          = RES0_NARROW;
             localparam bit [0:0]    RES_ALLOW_ELEMWISE  = RES0_ALLOW_ELEMWISE;
 
+            localparam bit [2:0]    OP_FIELD            = FIELD_COUNT_USED ? 3'b010 : '0;
+            localparam bit [2:0]    OP_INDEX_FIELD      = FIELD_COUNT_USED ? 3'b001 : '0;
+
             vproc_pipeline #(
                 .VREG_W              ( VREG_W              ),
                 .CFG_VL_W            ( CFG_VL_W            ),
@@ -652,7 +698,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 .RES_ALWAYS_ELEMWISE ( '0                  ),
                 .RES_ALWAYS_VREG     ( RES_ALWAYS_VREG     ),
                 .FIELD_COUNT_USED    ( FIELD_COUNT_USED    ),
-                .FIELD_OP            ( FIELD_OP            ),
+                .OP_FIELD            ( OP_FIELD            ),
+                .OP_INDEX_FIELD      ( OP_INDEX_FIELD      ),
                 .VLSU_QUEUE_SZ       ( VLSU_QUEUE_SZ       ),
                 .VLSU_FLAGS          ( VLSU_FLAGS          ),
                 .MUL_TYPE            ( MUL_TYPE            ),
@@ -681,6 +728,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             localparam bit [1:0]    RES_NARROW          = {1'b0, RES0_NARROW};
             localparam bit [1:0]    RES_ALLOW_ELEMWISE  = {1'b0, RES0_ALLOW_ELEMWISE};
 
+            localparam bit [2:0]    OP_FIELD            = FIELD_COUNT_USED ? 3'b010 : '0;
+            localparam bit [2:0]    OP_INDEX_FIELD      = FIELD_COUNT_USED ? 3'b001 : '0;
+
             vproc_pipeline #(
                 .VREG_W              ( VREG_W              ),
                 .CFG_VL_W            ( CFG_VL_W            ),
@@ -717,7 +767,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 .RES_ALWAYS_ELEMWISE ( '0                  ),
                 .RES_ALWAYS_VREG     ( RES_ALWAYS_VREG     ),
                 .FIELD_COUNT_USED    ( FIELD_COUNT_USED    ),
-                .FIELD_OP            ( FIELD_OP            ),
+                .OP_FIELD            ( OP_FIELD            ),
+                .OP_INDEX_FIELD      ( OP_INDEX_FIELD      ),
                 .VLSU_QUEUE_SZ       ( VLSU_QUEUE_SZ       ),
                 .VLSU_FLAGS          ( VLSU_FLAGS          ),
                 .MUL_TYPE            ( MUL_TYPE            ),
@@ -746,6 +797,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             localparam bit [0:0]    RES_NARROW          = RES0_NARROW;
             localparam bit [0:0]    RES_ALLOW_ELEMWISE  = RES0_ALLOW_ELEMWISE;
 
+            localparam bit [3:0]    OP_FIELD            = FIELD_COUNT_USED ? 4'b0010 : '0;
+            localparam bit [3:0]    OP_INDEX_FIELD      = FIELD_COUNT_USED ? 4'b0001 : '0;
+
             vproc_pipeline #(
                 .VREG_W              ( VREG_W              ),
                 .CFG_VL_W            ( CFG_VL_W            ),
@@ -782,7 +836,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 .RES_ALWAYS_ELEMWISE ( '0                  ),
                 .RES_ALWAYS_VREG     ( RES_ALWAYS_VREG     ),
                 .FIELD_COUNT_USED    ( FIELD_COUNT_USED    ),
-                .FIELD_OP            ( FIELD_OP            ),
+                .OP_FIELD            ( OP_FIELD            ),
+                .OP_INDEX_FIELD      ( OP_INDEX_FIELD      ),
                 .VLSU_QUEUE_SZ       ( VLSU_QUEUE_SZ       ),
                 .VLSU_FLAGS          ( VLSU_FLAGS          ),
                 .MUL_TYPE            ( MUL_TYPE            ),
@@ -811,6 +866,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             localparam bit [1:0]    RES_NARROW          = {1'b0, RES0_NARROW};
             localparam bit [1:0]    RES_ALLOW_ELEMWISE  = {1'b0, RES0_ALLOW_ELEMWISE};
 
+            localparam bit [3:0]    OP_FIELD            = FIELD_COUNT_USED ? 4'b0010 : '0;
+            localparam bit [3:0]    OP_INDEX_FIELD      = FIELD_COUNT_USED ? 4'b0001 : '0;
+
             vproc_pipeline #(
                 .VREG_W              ( VREG_W              ),
                 .CFG_VL_W            ( CFG_VL_W            ),
@@ -847,7 +905,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 .RES_ALWAYS_ELEMWISE ( '0                  ),
                 .RES_ALWAYS_VREG     ( RES_ALWAYS_VREG     ),
                 .FIELD_COUNT_USED    ( FIELD_COUNT_USED    ),
-                .FIELD_OP            ( FIELD_OP            ),
+                .OP_FIELD            ( OP_FIELD            ),
+                .OP_INDEX_FIELD      ( OP_INDEX_FIELD      ),
                 .VLSU_QUEUE_SZ       ( VLSU_QUEUE_SZ       ),
                 .VLSU_FLAGS          ( VLSU_FLAGS          ),
                 .MUL_TYPE            ( MUL_TYPE            ),
@@ -876,6 +935,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             localparam bit [0:0]    RES_NARROW          = RES0_NARROW;
             localparam bit [0:0]    RES_ALLOW_ELEMWISE  = RES0_ALLOW_ELEMWISE;
 
+            localparam bit [4:0]    OP_FIELD            = FIELD_COUNT_USED ? 5'b0010 : '0;
+            localparam bit [4:0]    OP_INDEX_FIELD      = FIELD_COUNT_USED ? 5'b0001 : '0;
+
             vproc_pipeline #(
                 .VREG_W              ( VREG_W              ),
                 .CFG_VL_W            ( CFG_VL_W            ),
@@ -912,7 +974,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 .RES_ALWAYS_ELEMWISE ( '0                  ),
                 .RES_ALWAYS_VREG     ( RES_ALWAYS_VREG     ),
                 .FIELD_COUNT_USED    ( FIELD_COUNT_USED    ),
-                .FIELD_OP            ( FIELD_OP            ),
+                .OP_FIELD            ( OP_FIELD            ),
+                .OP_INDEX_FIELD      ( OP_INDEX_FIELD      ),
                 .VLSU_QUEUE_SZ       ( VLSU_QUEUE_SZ       ),
                 .VLSU_FLAGS          ( VLSU_FLAGS          ),
                 .MUL_TYPE            ( MUL_TYPE            ),
@@ -941,6 +1004,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             localparam bit [1:0]    RES_NARROW          = {1'b0, RES0_NARROW};
             localparam bit [1:0]    RES_ALLOW_ELEMWISE  = {1'b0, RES0_ALLOW_ELEMWISE};
 
+            localparam bit [4:0]    OP_FIELD            = FIELD_COUNT_USED ? 5'b0010 : '0;
+            localparam bit [4:0]    OP_INDEX_FIELD      = FIELD_COUNT_USED ? 5'b0001 : '0;
+
             vproc_pipeline #(
                 .VREG_W              ( VREG_W              ),
                 .CFG_VL_W            ( CFG_VL_W            ),
@@ -977,7 +1043,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 .RES_ALWAYS_ELEMWISE ( '0                  ),
                 .RES_ALWAYS_VREG     ( RES_ALWAYS_VREG     ),
                 .FIELD_COUNT_USED    ( FIELD_COUNT_USED    ),
-                .FIELD_OP            ( FIELD_OP            ),
+                .OP_FIELD            ( OP_FIELD            ),
+                .OP_INDEX_FIELD      ( OP_INDEX_FIELD      ),
                 .VLSU_QUEUE_SZ       ( VLSU_QUEUE_SZ       ),
                 .VLSU_FLAGS          ( VLSU_FLAGS          ),
                 .MUL_TYPE            ( MUL_TYPE            ),
@@ -1006,6 +1073,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             localparam bit [0:0]    RES_NARROW          = RES0_NARROW;
             localparam bit [0:0]    RES_ALLOW_ELEMWISE  = RES0_ALLOW_ELEMWISE;
 
+            localparam bit [5:0]    OP_FIELD            = FIELD_COUNT_USED ? 6'b00010 : '0;
+            localparam bit [5:0]    OP_INDEX_FIELD      = FIELD_COUNT_USED ? 6'b00001 : '0;
+
             vproc_pipeline #(
                 .VREG_W              ( VREG_W              ),
                 .CFG_VL_W            ( CFG_VL_W            ),
@@ -1042,7 +1112,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 .RES_ALWAYS_ELEMWISE ( '0                  ),
                 .RES_ALWAYS_VREG     ( RES_ALWAYS_VREG     ),
                 .FIELD_COUNT_USED    ( FIELD_COUNT_USED    ),
-                .FIELD_OP            ( FIELD_OP            ),
+                .OP_FIELD            ( OP_FIELD            ),
+                .OP_INDEX_FIELD      ( OP_INDEX_FIELD      ),
                 .VLSU_QUEUE_SZ       ( VLSU_QUEUE_SZ       ),
                 .VLSU_FLAGS          ( VLSU_FLAGS          ),
                 .MUL_TYPE            ( MUL_TYPE            ),
@@ -1071,6 +1142,9 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             localparam bit [1:0]    RES_NARROW          = {1'b0, RES0_NARROW};
             localparam bit [1:0]    RES_ALLOW_ELEMWISE  = {1'b0, RES0_ALLOW_ELEMWISE};
 
+            localparam bit [5:0]    OP_FIELD            = FIELD_COUNT_USED ? 6'b00010 : '0;
+            localparam bit [5:0]    OP_INDEX_FIELD      = FIELD_COUNT_USED ? 6'b00001 : '0;
+
             vproc_pipeline #(
                 .VREG_W              ( VREG_W              ),
                 .CFG_VL_W            ( CFG_VL_W            ),
@@ -1107,7 +1181,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 .RES_ALWAYS_ELEMWISE ( '0                  ),
                 .RES_ALWAYS_VREG     ( RES_ALWAYS_VREG     ),
                 .FIELD_COUNT_USED    ( FIELD_COUNT_USED    ),
-                .FIELD_OP            ( FIELD_OP            ),
+                .OP_FIELD            ( OP_FIELD            ),
+                .OP_INDEX_FIELD      ( OP_INDEX_FIELD      ),
                 .VLSU_QUEUE_SZ       ( VLSU_QUEUE_SZ       ),
                 .VLSU_FLAGS          ( VLSU_FLAGS          ),
                 .MUL_TYPE            ( MUL_TYPE            ),
