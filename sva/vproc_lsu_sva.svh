@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 
     // Assert that there is not attempt to stall the LSU output
-    // assert property (
-    //     @(posedge clk_i)
-    //     pipe_out_valid_o |-> pipe_out_ready_i
-    // ) else begin
-    //     $error("attempt to stall LSU output");
-    // end
+    assert property (
+        @(posedge clk_i)
+        pipe_out_valid_o |-> pipe_out_ready_i
+    ) else begin
+        $error("attempt to stall LSU output");
+    end
 
     // Assert that there is no memory result transaction while dequeueing a suppressed request
     assert property (
