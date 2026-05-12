@@ -222,9 +222,10 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
     } state_t;
 
     // identify the unit of the supplied instruction
-    logic unit_lsu, unit_alu, unit_mul, unit_sld, unit_elem, unit_div, unit_fpu;
+    logic unit_lsu, unit_alu, unit_wca, unit_mul, unit_sld, unit_elem, unit_div, unit_fpu;
     assign unit_lsu  = UNITS[UNIT_LSU ] & (pipe_in_data_i.unit == UNIT_LSU );
     assign unit_alu  = UNITS[UNIT_ALU ] & (pipe_in_data_i.unit == UNIT_ALU );
+    assign unit_wca  = UNITS[UNIT_WCA ] & (pipe_in_data_i.unit == UNIT_WCA );
     assign unit_mul  = UNITS[UNIT_MUL ] & (pipe_in_data_i.unit == UNIT_MUL );
     assign unit_sld  = UNITS[UNIT_SLD ] & (pipe_in_data_i.unit == UNIT_SLD );
     assign unit_elem = UNITS[UNIT_ELEM] & (pipe_in_data_i.unit == UNIT_ELEM);
@@ -468,6 +469,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
         unique case (1'b1)
             unit_lsu:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.lsu.masked;
             unit_alu:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.alu.op_mask != ALU_MASK_NONE;
+            unit_wca:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.wca.masked;
             unit_mul:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.mul.masked;
             unit_div:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.div.masked;
             unit_fpu:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.div.masked;

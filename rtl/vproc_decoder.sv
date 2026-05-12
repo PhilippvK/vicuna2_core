@@ -296,6 +296,32 @@ module vproc_decoder #(
 
             end
 
+            // OPCODE CUSTOM1 (vector)
+            7'h2b: begin
+                // select source operands:
+                unique case (instr_i[14:12])
+                    3'b000: begin // op0
+                        // vector wca
+                        unique case ({instr_i[31:26], instr_i[14:12]})
+                            6'b000000: begin // unpack_clusters
+                                rs1_o.vreg    = 1'b0; // rs1 is not used
+                                rs1_o.xreg    = 1'b0;
+                                // rs1_o.r.vaddr = instr_vs1;
+                                rs2_o.vreg    = 1'b1; // rs2 is a vector register
+                                rs2_o.xreg    = 1'b0;
+                                rs2_o.r.vaddr = instr_vs2;
+                                rd_o.vreg     = 1'b1;
+                                rd_o.addr     = instr_vd;
+                                unit_o        = UNIT_WCA;
+                                // mode_o.wca.masked = instr_masked;
+                                mode_o.wca.masked = 1'b0;
+                                // vxrm_o              = VXRM_RDN;
+                            end
+                        endcase
+                    end
+                endcase
+            end
+
             // OPCODE VECTOR:
             7'h57: begin
 

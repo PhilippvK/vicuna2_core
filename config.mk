@@ -42,6 +42,13 @@ ifeq ($(VPROC_CONFIG), dual-zve32x)
   VREG_W          ?= $(VREG_W)
   VPROC_PIPELINES ?= $(VMEM_W):VLSU,VELEM $(VLANE_W):VMUL,VSLD,VDIV,VALU
 else
+ifeq ($(VPROC_CONFIG), dual-zve32x-xvwca)
+  VPORT_POLICY    ?= some
+  VMEM_W          ?= 32
+  VREG_W          ?= $(VREG_W)
+  # VPROC_PIPELINES ?= $(VMEM_W):VLSU,VELEM $(VLANE_W):VMUL,VSLD,VDIV,VALU $(VLANE_W):VWCA
+  VPROC_PIPELINES ?= $(VMEM_W):VLSU,VELEM $(VLANE_W):VMUL,VSLD,VDIV,VALU,VWCA
+else
 ifeq ($(VPROC_CONFIG), dual-zve32f)
   VPORT_POLICY    ?= some
   VMEM_W          ?= 32
@@ -62,6 +69,7 @@ ifeq ($(VPROC_CONFIG), legacy)
                                     $(VPIPE_W_DFLT):VSLD 32:VELEM
 else
 $(error Unknown vector coprocessor configuration $(VPROC_CONFIG))
+endif
 endif
 endif
 endif
@@ -116,12 +124,15 @@ $(VPROC_CONFIG_PKG):
 	    width=`echo $$pipe | cut -d ":" -f 1`;                                                    \
 	    unit_str=`echo $$pipe | cut -d ":" -f 2 | sed 's/,/, /g'`;                                \
 	    unit_mask=`echo $$pipe | cut -d ":" -f 2 | sed 's/,/ | /g' |                              \
-	               sed "s/V\(LSU\|ALU\|MUL\|SLD\|ELEM\|DIV\|FPU\)/(UNIT_CNT'(1) << UNIT_\1)/g"`;  \
+	               sed "s/V\(LSU\|ALU\|MUL\|SLD\|ELEM\|DIV\|FPU\|WCA\)/(UNIT_CNT'(1) << UNIT_\1)/g"`;  \
 	    vport_cnt=1;                                                                              \
 	    if echo "$$pipe" | grep -q "VMUL" && [ $$(($$width * 4)) -gt "$(VREG_W)" ]; then          \
 	        vport_cnt=2;                                                                          \
 	    fi;                                                                                       \
 	    if echo "$$pipe" | grep -q "VFPU" && [ $$(($$width * 4)) -gt "$(VREG_W)" ]; then          \
+	        vport_cnt=2;                                                                          \
+	    fi;                                                                                        \
+	    if echo "$$pipe" | grep -q "VWCA" && [ $$(($$width * 4)) -gt "$(VREG_W)" ]; then          \
 	        vport_cnt=2;                                                                          \
 	    fi;                                                                                        \
 	    if [ $$(($$width * 2)) -gt "$(VREG_W)" ]; then                                            \

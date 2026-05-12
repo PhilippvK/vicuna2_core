@@ -99,7 +99,7 @@ typedef enum logic [1:0] {
     VXRM_ROD = 2'b11    // round-to-odd
 } cfg_vxrm;
 
-typedef enum logic [2:0] {
+typedef enum logic [3:0] {
     UNIT_LSU,
     UNIT_ALU,
     UNIT_MUL,
@@ -107,12 +107,13 @@ typedef enum logic [2:0] {
     UNIT_FPU,
     UNIT_SLD,
     UNIT_ELEM,
+    UNIT_WCA,
     // pseudo-units (used for instructions that require no unit):
     UNIT_CFG
 } op_unit;
 
 // The number of different types of execution units (excludes pseudo-units)
-parameter int unsigned UNIT_CNT = 7;
+parameter int unsigned UNIT_CNT = 8;
 
 typedef enum logic [1:0] {
     COUNT_INC_1,
@@ -344,6 +345,10 @@ typedef struct packed {
     logic       keep_vl;
 } op_mode_cfg;
 
+typedef struct packed {
+    logic masked;
+} op_mode_wca;
+
 `ifdef VPROC_OP_MODE_UNION
 typedef union packed {
     logic [12:0]  unused;
@@ -358,6 +363,7 @@ typedef struct packed {
     op_mode_cfg  cfg;
     op_mode_div  div;
     op_mode_fpu  fpu;
+    op_mode_wca wca;
 } op_mode;
 
 // source register type:
